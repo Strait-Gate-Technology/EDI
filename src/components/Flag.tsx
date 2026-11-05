@@ -1,8 +1,9 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { scenarioLocation, useStore } from '../store';
 import {
-  COUNTRIES, DEFAULT_REGION, REGIONS, countryOf, flagId, locationSuffix, regionName,
-  type Country, type Location,
+  COUNTRIES, DEFAULT_REGION, REGIONS, countryOf, flagId, locationSuffix, regionName, suffixLevel,
+  type Country, type Location, type SuffixLevel,
 } from '../tax/regions';
 import type { Scenario } from '../types';
 import { Icon } from './ui';
@@ -157,9 +158,15 @@ export function LocationPicker({
 }
 
 /** "(Ontario 🏳)" / "(U.S. 🏳, Maine 🏳)" — only when it differs from the app default. */
-export function LocationSuffix({ loc }: { loc: Location }) {
-  const global = useStore((s) => s.location);
-  const parts = locationSuffix(loc, global);
+/** App-wide suffix level; only re-renders subscribers when the level itself changes. */
+export function useSuffixLevel(): SuffixLevel {
+  return useStore(
+    useShallow((s) => suffixLevel(s.scenarios.map((sc) => scenarioLocation(sc, s.location)), s.location)),
+  );
+}
+
+export function LocationSuffix({ loc, compact = false }: { loc: Location; compact?: boolean }) {
+  const parts = locationSuffix(loc, useSuffixLevel(), compact);
   if (!parts) return null;
   return (
     <span className="loc-suffix">
@@ -167,7 +174,7 @@ export function LocationSuffix({ loc }: { loc: Location }) {
       {parts.map((p, i) => (
         <span key={p.flag} className="loc-part">
           {i > 0 && ', '}
-          {p.label} <Flag id={p.flag} title={p.label} />
+          {p.label === p.title ? p.label : <abbr title={p.title}>{p.label}</abbr>} <Flag id={p.flag} title={p.title} />
         </span>
       ))}
       )
@@ -175,12 +182,12 @@ export function LocationSuffix({ loc }: { loc: Location }) {
   );
 }
 
-export function ScenarioTitle({ scenario }: { scenario: Scenario }) {
+export function ScenarioTitle({ scenario, compact = false }: { scenario: Scenario; compact?: boolean }) {
   const global = useStore((s) => s.location);
   return (
     <>
       <span className="title-text">{scenario.name || 'Untitled'}</span>
-      <LocationSuffix loc={scenarioLocation(scenario, global)} />
+      <LocationSuffix loc={scenarioLocation(scenario, global)} compact={compact} />
     </>
   );
 }

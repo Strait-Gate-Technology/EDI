@@ -944,3 +944,31 @@ body.is-mobile .totals-toggle {
 }
 body.is-mobile .totals:not(.is-open) .totals-grid,
 body.is-mobile .totals:not(.is-open) .totals-warn { display: none; }
+
+/* Scenario header: name → suffix → tax-location picker, actions pushed right */
+.scenario-title { flex: 0 1 auto; }
+.scenario-name { field-sizing: content; }
+.scenario-head .zone-location { margin-left: 4px; }
+.scenario-head .scenario-tools { margin-left: auto; }
+.loc-suffix abbr { text-decoration: none; }
+
+/* Analysis column titles: sized to fit; the location tag is never truncated */
+.col-head h3.fit-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.3em;
+  row-gap: 2px;
+  overflow: visible;
+  white-space: normal;
+  line-height: 1.2;
+}
+.fit-title .title-text { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fit-title .loc-suffix { flex: none; margin-left: 0; font-size: 0.85em; }
+.fit-title .flag { width: 1.15em; height: 0.77em; vertical-align: -0.1em; }
+.fit-title.is-two-line .title-text { flex: 1 1 100%; }
+.fit-title.is-two-line .loc-suffix { color: hsl(230 30% 88% / 0.85); }
+.col-head { flex-wrap: wrap; row-gap: 6px; }
+.col-head h3.fit-title.is-two-line { order: 10; flex: 1 1 100%; }
+.col-head .col-tools { margin-left: auto; }
+.fit-title.tag-wraps .loc-suffix { white-space: normal; flex-wrap: wrap; flex: 1 1 100%; }

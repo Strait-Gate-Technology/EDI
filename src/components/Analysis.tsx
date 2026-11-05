@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, type DragEvent } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { fmtUnit, hoursFmt, money, pct, type ScenarioTotals } from '../calc';
 import { useStore } from '../store';
 import { regionName } from '../tax/regions';
@@ -213,7 +213,7 @@ const Column = memo(function Column(props: {
       <header className="col-head">
         <span className="col-grip" aria-hidden="true"><Icon name="grip" size={14} /></span>
         <span className={'rank rank--' + props.rank}>#{props.rank}</span>
-        <h3><ScenarioTitle scenario={sc} /></h3>
+        <FitTitle><ScenarioTitle scenario={sc} /></FitTitle>
         <div className="col-tools">
           {props.mobile && (
             <>
@@ -279,6 +279,63 @@ const Column = memo(function Column(props: {
     </div>
   );
 });
+
+const FIT_MAX = 16;
+/** Smallest size for a single-line title; below this the tag moves to its own line. */
+const FIT_ONE_LINE_MIN = 12.5;
+/** Smallest size for the name when it has a line to itself (then it ellipsises). */
+const FIT_NAME_MIN = 12;
+/** Location tag size when it sits on its own line — always fully shown. */
+const TAG_OWN_LINE = 12.5;
+const TAG_MIN = 10.5;
+
+/**
+ * Column title sized to fit. One line (name + location tag scaled together) when that
+ * stays readable; otherwise the name gets the first line, sized to fit, and the location
+ * tag takes a second line at a fixed legible size. The tag is never truncated.
+ */
+function FitTitle({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      const name = el.querySelector<HTMLElement>('.title-text');
+      const tag = el.querySelector<HTMLElement>('.loc-suffix');
+      el.classList.remove('is-two-line', 'tag-wraps');
+      el.style.fontSize = FIT_MAX + 'px';
+      if (tag) tag.style.fontSize = '';
+      const avail = el.clientWidth;
+      if (!avail || !name) return;
+      const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+      const nameW = name.scrollWidth;
+      // ~4% headroom: text width doesn't scale perfectly linearly with font size.
+      const oneLine = (FIT_MAX * avail) / ((nameW + (tag ? tag.scrollWidth + gap : 0)) * 1.04 + 2);
+      if (oneLine >= FIT_ONE_LINE_MIN || !tag) {
+        el.style.fontSize = Math.max(FIT_NAME_MIN, Math.min(FIT_MAX, oneLine)).toFixed(2) + 'px';
+        return;
+      }
+      // Two-line mode: the title drops below the rank/buttons row and gets the full width.
+      el.classList.add('is-two-line');
+      const wide = el.clientWidth || avail;
+      el.style.fontSize = Math.max(FIT_NAME_MIN, Math.min(FIT_MAX, FIT_MAX * wide / (nameW + 1))).toFixed(2) + 'px';
+      tag.style.fontSize = TAG_OWN_LINE + 'px';
+      const tagW = tag.scrollWidth;
+      if (tagW > wide) tag.style.fontSize = Math.max(TAG_MIN, (TAG_OWN_LINE * wide) / (tagW + 1)).toFixed(2) + 'px';
+      // Still too wide at the minimum: the tag wraps between nation and province (CSS).
+      el.classList.toggle('tag-wraps', tag.scrollWidth > wide + 1);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el.parentElement ?? el);
+    return () => ro.disconnect();
+  });
+  return (
+    <h3 ref={ref} className="fit-title">
+      {children}
+    </h3>
+  );
+}
 
 function Bar({ value, max, kind }: { value: number; max: number; kind?: string }) {
   const w = Math.min(100, (Math.abs(value) / max) * 100);

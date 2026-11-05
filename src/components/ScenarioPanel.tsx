@@ -74,6 +74,7 @@ function ScenarioEditor({ scenario }: { scenario: Scenario }) {
           />
           <LocationSuffix loc={loc} />
         </div>
+        <ScenarioLocationControl scenario={scenario} />
         <div className="scenario-tools">
           <button type="button" className="glass-btn icon-btn" title="Duplicate scenario" aria-label="Duplicate scenario" onClick={() => dup(scenario.id)}>
             <Icon name="copy" />
@@ -108,7 +109,7 @@ function ScenarioLocationControl({ scenario }: { scenario: Scenario }) {
   const linked = scenario.location.linked;
   return (
     <div className="zone-location">
-      <span className="zone-location-label">Tax</span>
+      <span className="zone-location-label">Tax location</span>
       <LocationPicker value={loc} prefer={global} onChange={(l) => setLoc(scenario.id, l)} labelPrefix="Scenario " />
       <button
         type="button"
@@ -211,7 +212,6 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
           <span className={`kind-dot kind-dot--${kind}`} />
           {KIND_META[kind].plural}
         </h3>
-        {kind === 'income' && <ScenarioLocationControl scenario={scenario} />}
         <span className="zone-hint">
           {state === 'reject' ? `Only ${KIND_META[kind].label.toLowerCase()} cards belong here` : state === 'accept' ? 'Drop to add' : `${cards.length} card${cards.length === 1 ? '' : 's'}`}
         </span>

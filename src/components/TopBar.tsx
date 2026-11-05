@@ -164,7 +164,7 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
               onDragEnd={() => document.body.classList.remove('dragging-scenario')}
               title={mobile ? `${s.name} — long-press for options` : view === 'analysis' ? `Drag “${s.name}” onto a column, or click to edit. Right-click for options.` : `Edit ${s.name}. Right-click for options; Delete key deletes.`}
             >
-              <span className="tab-name"><ScenarioTitle scenario={s} /></span>
+              <span className="tab-name"><ScenarioTitle scenario={s} compact /></span>
               <span className="tab-metric">{v == null ? '—' : money(v)}<small>/h</small></span>
             </button>
           );

@@ -5,9 +5,10 @@ export interface Location {
   region: string;
 }
 
-export const COUNTRIES: { code: Country; name: string; short: string; regionWord: string }[] = [
-  { code: 'CA', name: 'Canada', short: 'Canada', regionWord: 'Province / territory' },
-  { code: 'US', name: 'United States', short: 'U.S.', regionWord: 'State' },
+/** `abbr` is the compact tag used in the top-rack pills. */
+export const COUNTRIES: { code: Country; name: string; short: string; abbr: string; regionWord: string }[] = [
+  { code: 'CA', name: 'Canada', short: 'Canada', abbr: 'CAN', regionWord: 'Province / territory' },
+  { code: 'US', name: 'United States', short: 'U.S.', abbr: 'U.S.', regionWord: 'State' },
 ];
 
 export const REGIONS: Record<Country, { code: string; name: string }[]> = {
@@ -51,16 +52,35 @@ export const sameLocation = (a: Location, b: Location) => a.country === b.countr
 
 export interface SuffixPart {
   label: string;
+  /** Full name, for tooltips / screen readers. */
+  title: string;
   flag: string;
 }
 
 /**
- * The smallest level of government at which `loc` differs from the default:
- * same country → just the region; different country → country + region.
+ * How much location detail every scenario name carries, decided across ALL scenarios
+ * (the least-common level of government that still tells them apart):
+ *  - 'none'    every scenario matches the default location
+ *  - 'region'  some differ, but only by province / state → every name shows its province / state
+ *  - 'country' some are in another nation → every name shows nation + province / state
  */
-export function locationSuffix(loc: Location, def: Location): SuffixPart[] | null {
-  if (sameLocation(loc, def)) return null;
-  const region = { label: regionName(loc.country, loc.region), flag: flagId(loc.country, loc.region) };
-  if (loc.country === def.country) return [region];
-  return [{ label: countryOf(loc.country).short, flag: flagId(loc.country) }, region];
+export type SuffixLevel = 'none' | 'region' | 'country';
+
+export function suffixLevel(locs: Location[], def: Location): SuffixLevel {
+  if (locs.some((l) => l.country !== def.country)) return 'country';
+  if (locs.some((l) => l.region !== def.region)) return 'region';
+  return 'none';
+}
+
+/** Full names ("Ontario", "United States") by default; `compact` gives "ON" / "CAN" / "U.S.". */
+export function locationSuffix(loc: Location, level: SuffixLevel, compact = false): SuffixPart[] | null {
+  if (level === 'none') return null;
+  const region = {
+    label: compact ? loc.region : regionName(loc.country, loc.region),
+    title: regionName(loc.country, loc.region),
+    flag: flagId(loc.country, loc.region),
+  };
+  if (level === 'region') return [region];
+  const c = countryOf(loc.country);
+  return [{ label: compact ? c.abbr : c.name, title: c.name, flag: flagId(loc.country) }, region];
 }
