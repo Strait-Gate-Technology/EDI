@@ -17,7 +17,7 @@ const METRICS: Metric[] = [
 
 const endDrag = () => document.body.classList.remove('dragging-scenario', 'dragging-slot');
 
-export function Analysis() {
+export function Analysis({ mobile = false }: { mobile?: boolean }) {
   const scenarios = useStore((s) => s.scenarios);
   const { columns, slots } = useStore((s) => s.analysis);
   const { setColumns, placeInSlot, clearSlot, swapSlots } = useStore.getState();
@@ -47,7 +47,9 @@ export function Analysis() {
         <div>
           <h2>Analysis</h2>
           <p className="muted">
-            Drag a column onto another to swap, onto the pool or the top rack to take it off stage. Drag scenarios from the top rack or the pool into a column.
+            {mobile
+              ? 'Swipe sideways between columns · ◀ ▶ reorder · × sends a column to the pool · tap a pool scenario to bring it on stage.'
+              : 'Drag a column onto another to swap, onto the pool or the top rack to take it off stage. Drag scenarios from the top rack or the pool into a column.'}
           </p>
         </div>
         <div className="col-stepper" role="group" aria-label="Number of columns">
@@ -57,7 +59,7 @@ export function Analysis() {
         </div>
       </div>
 
-      <div className="stage" style={{ gridTemplateColumns: `repeat(${columns}, minmax(250px, 1fr))` }}>
+      <div className="stage" style={mobile ? undefined : { gridTemplateColumns: `repeat(${columns}, minmax(250px, 1fr))` }}>
         {shown.map((id, slot) => {
           const sc = id ? byId.get(id) : undefined;
           return (
@@ -69,6 +71,10 @@ export function Analysis() {
                   totals={totals.get(sc.id)!}
                   rank={ranks.get(sc.id)!}
                   maxes={maxes}
+                  mobile={mobile}
+                  canLeft={slot > 0}
+                  canRight={slot < shown.length - 1}
+                  onMove={(dir) => swapSlots(slot, slot + dir)}
                 />
               ) : (
                 <div className="empty-slot-inner">
@@ -99,7 +105,7 @@ export function Analysis() {
       >
         <h3>Pool <span className="count">{pool.length}</span></h3>
         {pool.length === 0 ? (
-          <p className="muted small">All scenarios are on stage. Drag a column here to free it.</p>
+          <p className="muted small">All scenarios are on stage. {mobile ? 'Tap × on a column to free it.' : 'Drag a column here to free it.'}</p>
         ) : (
           <div className="pool-items">
             {pool.map((s) => {
@@ -110,7 +116,7 @@ export function Analysis() {
                   type="button"
                   className="pool-chip cycle"
                   style={cycle(s.id + ':pool', 150, 380)}
-                  draggable
+                  draggable={!mobile}
                   onDragStart={(e) => {
                     e.dataTransfer.setData(DRAG_SCENARIO, s.id);
                     e.dataTransfer.effectAllowed = 'copyMove';
@@ -171,6 +177,10 @@ const Column = memo(function Column(props: {
   totals: ScenarioTotals;
   rank: number;
   maxes: Record<string, number>;
+  mobile: boolean;
+  canLeft: boolean;
+  canRight: boolean;
+  onMove: (dir: -1 | 1) => void;
 }) {
   const { scenario: sc, totals: t } = props;
   const period = useStore((s) => s.period);
@@ -185,7 +195,7 @@ const Column = memo(function Column(props: {
     <div
       className={'column glass cycle' + (props.rank === 1 ? ' is-top' : '') + (dragging ? ' is-dragging' : '')}
       style={cycle(sc.id + ':col', 160, 420)}
-      draggable
+      draggable={!props.mobile}
       onDragStart={(e) => {
         e.dataTransfer.setData(DRAG_SLOT, String(props.slot));
         e.dataTransfer.effectAllowed = 'move';
@@ -205,6 +215,12 @@ const Column = memo(function Column(props: {
         <span className={'rank rank--' + props.rank}>#{props.rank}</span>
         <h3><ScenarioTitle scenario={sc} /></h3>
         <div className="col-tools">
+          {props.mobile && (
+            <>
+              <button type="button" className="tool" disabled={!props.canLeft} onClick={() => props.onMove(-1)} aria-label="Move left" title="Move left">◀</button>
+              <button type="button" className="tool" disabled={!props.canRight} onClick={() => props.onMove(1)} aria-label="Move right" title="Move right">▶</button>
+            </>
+          )}
           <button type="button" className="tool" onClick={() => { setActive(sc.id); setView('build'); }} title="Edit in builder" aria-label="Edit scenario"><Icon name="back" size={14} /></button>
           <button type="button" className="tool tool--danger" onClick={() => clearSlot(props.slot)} title="Send to pool" aria-label="Send to pool"><Icon name="x" size={14} /></button>
         </div>

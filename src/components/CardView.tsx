@@ -190,7 +190,8 @@ function CardViewImpl(p: CardViewProps) {
             </span>
           )}
           {p.onQuickAdd && (
-            <button type="button" className="tool" onClick={p.onQuickAdd} title={p.quickAddLabel} aria-label={p.quickAddLabel}>
+            <button type="button" className="tool quick-add" onClick={p.onQuickAdd} title={p.quickAddLabel} aria-label={p.quickAddLabel}>
+              <span className="tool-label">Add</span>
               <Icon name="arrow" size={14} />
             </button>
           )}

@@ -63,7 +63,14 @@ interface Actions {
   startOver: () => void;
 }
 
-export type Store = AppData & Actions & { focusTarget: FocusTarget | null };
+export type MobilePane = 'library' | 'scenario';
+
+export type Store = AppData & Actions & {
+  focusTarget: FocusTarget | null;
+  /** Which builder pane is shown on phones (not persisted). */
+  mobilePane: MobilePane;
+  setMobilePane: (p: MobilePane) => void;
+};
 
 let nonce = 0;
 const focus = (id: string): FocusTarget => ({ id, nonce: ++nonce });
@@ -192,12 +199,15 @@ export const useStore = create<Store>()(
     immer((set, get) => ({
       ...sampleData(),
       focusTarget: null,
+      mobilePane: 'scenario',
+      setMobilePane: (p) => set((s) => { s.mobilePane = p; }),
 
       addLibraryCard: (kind) => {
         const d = card(kind, DEFAULTS[kind].name, '0', DEFAULTS[kind].frequency);
         set((s) => {
           s.library.push(d);
           s.focusTarget = focus(d.id);
+          s.mobilePane = 'library';
         });
         return d.id;
       },
@@ -238,6 +248,7 @@ export const useStore = create<Store>()(
           s.activeScenarioId = id;
           s.view = 'build';
           s.focusTarget = focus(id);
+          s.mobilePane = 'scenario';
         });
         return id;
       },
@@ -261,6 +272,7 @@ export const useStore = create<Store>()(
           s.scenarios.splice(at + 1, 0, copy);
           s.activeScenarioId = copy.id;
           s.focusTarget = focus(copy.id);
+          s.mobilePane = 'scenario';
         }),
       deleteScenario: (id) =>
         set((s) => {
@@ -270,7 +282,7 @@ export const useStore = create<Store>()(
           s.analysis.slots = s.analysis.slots.map((x) => (x === id ? null : x));
           if (s.activeScenarioId === id) s.activeScenarioId = s.scenarios[Math.min(i, s.scenarios.length - 1)]?.id ?? null;
         }),
-      setActive: (id) => set((s) => { s.activeScenarioId = id; }),
+      setActive: (id) => set((s) => { s.activeScenarioId = id; s.mobilePane = 'scenario'; }),
 
       addCardToScenario: (scenarioId, libraryId) =>
         set((s) => {

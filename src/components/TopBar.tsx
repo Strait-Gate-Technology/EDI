@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { money } from '../calc';
-import { emptyData, sampleData, useStore, type AppData } from '../store';
+import { emptyData, useStore, type AppData } from '../store';
 import { PERIODS } from '../types';
+import { askClearAll, askDeleteScenario, askLoadSample, askStartOver } from './actions';
+import { alertDialog } from './Dialog';
 import { LocationPicker, ScenarioTitle } from './Flag';
 import { DRAG_SCENARIO, DRAG_SLOT, scrollAndFocus, useAllTotals } from './hooks';
 import { Icon, Menu, cycle } from './ui';
 
-export function TopBar() {
+export function TopBar({ mobile = false }: { mobile?: boolean }) {
   const scenarios = useStore((s) => s.scenarios);
   const activeId = useStore((s) => s.activeScenarioId);
   const view = useStore((s) => s.view);
@@ -14,9 +16,13 @@ export function TopBar() {
   const location = useStore((s) => s.location);
   const reduceEffects = useStore((s) => s.reduceEffects);
   const focusId = useStore((s) => s.focusTarget?.id);
-  const { addScenario, setActive, setView, setPeriod, replaceAll, setLocation, setReduceEffects, clearSlot, duplicateScenario, deleteScenario, startOver } = useStore.getState();
+  const { addScenario, setActive, setView, setPeriod, replaceAll, setLocation, setReduceEffects, clearSlot, duplicateScenario } = useStore.getState();
   const library = useStore((s) => s.library);
   const [ctx, setCtx] = useState<{ id: string; x: number; y: number } | null>(null);
+  // Touch long-press opens the same menu as right-click (iOS never fires contextmenu).
+  const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean } | null>(null);
+  const openCtx = (id: string, x: number, y: number) =>
+    setCtx({ id, x: Math.max(8, Math.min(x, window.innerWidth - 200)), y: Math.min(y, window.innerHeight - 120) });
   const ctxScenario = ctx ? scenarios.find((s) => s.id === ctx.id) : undefined;
 
   useEffect(() => {
@@ -36,13 +42,6 @@ export function TopBar() {
     };
   }, [ctx]);
 
-  const onStartOver = () => {
-    if (scenarios.length === 0 && library.length === 0) return;
-    const msg = `Start over? This deletes all ${scenarios.length} scenario${scenarios.length === 1 ? '' : 's'} and all ${library.length} library card${library.length === 1 ? '' : 's'} (incomes, expenses and hours). Your location and display settings are kept.
-
-Tip: ☰ → Export JSON first if you might want them back.`;
-    if (confirm(msg)) startOver();
-  };
   const totals = useAllTotals();
   const fileRef = useRef<HTMLInputElement>(null);
   const tabsRef = useRef<HTMLElement>(null);
@@ -76,7 +75,7 @@ Tip: ☰ → Export JSON first if you might want them back.`;
       for (const sc of data.scenarios) sc.location ??= { linked: true, ...(data.location ?? emptyData().location) };
       replaceAll({ ...emptyData(), ...data });
     } catch (e) {
-      alert('Could not import: ' + (e instanceof Error ? e.message : e));
+      alertDialog('Could not import', e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -84,12 +83,12 @@ Tip: ☰ → Export JSON first if you might want them back.`;
     <header className="topbar glass cycle" style={cycle('topbar', 260, 540)}>
       <button type="button" className="glass-btn new-scenario" onClick={addScenario} title="New Scenario">
         <span className="plus-orb cycle" style={cycle('plus-orb', 90, 200)}><Icon name="plus" size={18} /></span>
-        <span className="label">New Scenario</span>
+        <span className="label">{mobile ? 'New' : 'New Scenario'}</span>
       </button>
       <button
         type="button"
         className="glass-btn start-over"
-        onClick={onStartOver}
+        onClick={askStartOver}
         disabled={scenarios.length === 0 && library.length === 0}
         title="Delete all scenarios and library cards"
       >
@@ -124,17 +123,37 @@ Tip: ☰ → Export JSON first if you might want them back.`;
               key={s.id}
               data-sid={s.id}
               type="button"
-              draggable
+              draggable={!mobile}
               className={'scenario-tab cycle' + (s.id === activeId && view === 'build' ? ' is-active' : '')}
               style={cycle(s.id + ':tab', 160, 400)}
-              onClick={() => { setActive(s.id); setView('build'); }}
+              onClick={() => {
+                if (press.current?.fired) { press.current.fired = false; return; }
+                setActive(s.id);
+                setView('build');
+              }}
+              onPointerDown={(e) => {
+                if (e.pointerType !== 'touch') return;
+                const st = { x: e.clientX, y: e.clientY, fired: false, timer: setTimeout(() => { st.fired = true; openCtx(s.id, st.x, st.y + 12); }, 480) };
+                if (press.current) clearTimeout(press.current.timer);
+                press.current = st;
+              }}
+              onPointerMove={(e) => {
+                const p = press.current;
+                if (p && !p.fired && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) clearTimeout(p.timer);
+              }}
+              onPointerUp={() => press.current && clearTimeout(press.current.timer)}
+              onPointerCancel={() => press.current && clearTimeout(press.current.timer)}
+              onKeyDown={(e) => {
+                if (e.key === 'Delete') { e.preventDefault(); askDeleteScenario(s.id); }
+              }}
               onContextMenu={(e) => {
                 e.preventDefault();
                 const r = e.currentTarget.getBoundingClientRect();
                 // Keyboard-opened menus report (0,0): anchor under the tab instead.
                 const x = e.clientX || r.left;
                 const y = e.clientY || r.bottom + 4;
-                setCtx({ id: s.id, x: Math.min(x, window.innerWidth - 200), y: Math.min(y, window.innerHeight - 110) });
+                if (press.current?.fired) return; // already opened by long-press
+                openCtx(s.id, x, y);
               }}
               onDragStart={(e) => {
                 e.dataTransfer.setData(DRAG_SCENARIO, s.id);
@@ -143,7 +162,7 @@ Tip: ☰ → Export JSON first if you might want them back.`;
                 document.body.classList.add('dragging-scenario');
               }}
               onDragEnd={() => document.body.classList.remove('dragging-scenario')}
-              title={view === 'analysis' ? `Drag “${s.name}” onto a column, or click to edit` : `Edit ${s.name}`}
+              title={mobile ? `${s.name} — long-press for options` : view === 'analysis' ? `Drag “${s.name}” onto a column, or click to edit. Right-click for options.` : `Edit ${s.name}. Right-click for options; Delete key deletes.`}
             >
               <span className="tab-name"><ScenarioTitle scenario={s} /></span>
               <span className="tab-metric">{v == null ? '—' : money(v)}<small>/h</small></span>
@@ -171,7 +190,7 @@ Tip: ☰ → Export JSON first if you might want them back.`;
             className="menu-item row danger"
             onClick={() => {
               setCtx(null);
-              if (confirm(`Delete scenario "${ctxScenario.name}"?`)) deleteScenario(ctxScenario.id);
+              askDeleteScenario(ctxScenario.id);
             }}
           >
             <Icon name="trash" size={14} /> Delete
@@ -183,19 +202,21 @@ Tip: ☰ → Export JSON first if you might want them back.`;
         <LocationPicker value={location} onChange={setLocation} labelPrefix="Default " />
         <div className="segmented" role="group" aria-label="Display period">
           {PERIODS.map((p) => (
-            <button key={p.id} type="button" className={period === p.id ? 'is-on' : ''} onClick={() => setPeriod(p.id)} aria-pressed={period === p.id}>
-              {p.label}
+            <button key={p.id} type="button" className={period === p.id ? 'is-on' : ''} onClick={() => setPeriod(p.id)} aria-pressed={period === p.id} title={p.label}>
+              {mobile ? p.short.charAt(0).toUpperCase() + p.short.slice(1) : p.label}
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className={'glass-btn analysis-btn' + (view === 'analysis' ? ' is-on' : '')}
-          onClick={() => setView(view === 'analysis' ? 'build' : 'analysis')}
-        >
-          <Icon name={view === 'analysis' ? 'back' : 'chart'} />
-          {view === 'analysis' ? 'Back to builder' : 'Analysis'}
-        </button>
+        {!mobile && (
+          <button
+            type="button"
+            className={'glass-btn analysis-btn' + (view === 'analysis' ? ' is-on' : '')}
+            onClick={() => setView(view === 'analysis' ? 'build' : 'analysis')}
+          >
+            <Icon name={view === 'analysis' ? 'back' : 'chart'} />
+            {view === 'analysis' ? 'Back to builder' : 'Analysis'}
+          </button>
+        )}
         <Menu
           label="Data"
           align="right"
@@ -208,8 +229,8 @@ Tip: ☰ → Export JSON first if you might want them back.`;
             },
             { label: 'Export JSON', hint: 'Download all cards & scenarios', onClick: exportData },
             { label: 'Import JSON…', hint: 'Replace with an export', onClick: () => fileRef.current?.click() },
-            { label: 'Load sample data', hint: 'Replaces current data', onClick: () => confirm('Replace everything with the sample data?') && replaceAll(sampleData()) },
-            { label: 'Clear everything', danger: true, onClick: () => confirm('Delete all cards and scenarios?') && replaceAll(emptyData()) },
+            { label: 'Load sample data', hint: 'Replaces current data', onClick: askLoadSample },
+            { label: 'Clear everything', danger: true, onClick: askClearAll },
           ]}
         />
         <input

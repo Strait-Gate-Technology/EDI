@@ -4,6 +4,7 @@ import { scenarioLocation, useStore } from '../store';
 import { TAX_ASSUMPTIONS, TAX_YEAR, hasIncomeTax } from '../tax/engine';
 import { countryOf, regionName } from '../tax/regions';
 import { KINDS, KIND_META, PERIODS, type CardDef, type Kind, type Scenario } from '../types';
+import { askDeleteScenario } from './actions';
 import { CardView } from './CardView';
 import { LocationPicker, LocationSuffix } from './Flag';
 import { scrollAndFocus, useAllTotals, useLibraryMap } from './hooks';
@@ -41,7 +42,6 @@ function ScenarioEditor({ scenario }: { scenario: Scenario }) {
   const lib = useLibraryMap();
   const update = useStore((s) => s.updateScenario);
   const dup = useStore((s) => s.duplicateScenario);
-  const del = useStore((s) => s.deleteScenario);
   const global = useStore((s) => s.location);
   const totals = useAllTotals().get(scenario.id)!;
   const loc = scenarioLocation(scenario, global);
@@ -83,7 +83,7 @@ function ScenarioEditor({ scenario }: { scenario: Scenario }) {
             className="glass-btn icon-btn danger"
             title="Delete scenario"
             aria-label="Delete scenario"
-            onClick={() => confirm(`Delete scenario "${scenario.name}"?`) && del(scenario.id)}
+            onClick={() => askDeleteScenario(scenario.id)}
           >
             <Icon name="trash" />
           </button>
@@ -248,8 +248,10 @@ export function TotalsFooter({ totals, seed }: { totals: ScenarioTotals; seed: s
   const period = useStore((s) => s.period);
   const pm = PERIODS.find((p) => p.id === period)!;
   const per = (n: number) => n / pm.perYear;
+  // On phones the breakdown is collapsed so the sticky bar stays small.
+  const [open, setOpen] = useState(false);
   return (
-    <footer className="totals cycle" style={cycle(seed + ':totals', 120, 360)} aria-live="polite">
+    <footer className={'totals cycle' + (open ? ' is-open' : '')} style={cycle(seed + ':totals', 120, 360)} aria-live="polite">
       <dl className="totals-grid">
         <div><dt>Gross income</dt><dd>{money(per(totals.grossIncome))}</dd></div>
         <div><dt>Income tax ({pct(totals.taxDetail.effectiveRate)})</dt><dd className="neg">{money(-per(totals.tax))}</dd></div>
@@ -273,6 +275,9 @@ export function TotalsFooter({ totals, seed }: { totals: ScenarioTotals; seed: s
       {totals.hours <= 0 && totals.counts.income + totals.counts.expense > 0 && (
         <p className="totals-warn subtle">Add Hours cards to get an EDI / hour figure.</p>
       )}
+      <button type="button" className="totals-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {open ? 'Hide breakdown ▴' : `Breakdown ▾${totals.errors ? ' · ⚠ errors' : ''}`}
+      </button>
     </footer>
   );
 }

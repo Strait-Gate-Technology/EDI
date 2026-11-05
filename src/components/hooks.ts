@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { scenarioTotals, type ScenarioTotals } from '../calc';
 import { scenarioLocation, useStore } from '../store';
 import type { CardDef, Scenario } from '../types';
@@ -49,4 +49,49 @@ export function scrollAndFocus(el: HTMLElement | null, input?: HTMLInputElement 
     input.focus({ preventScroll: true });
     input.select();
   }
+}
+
+/**
+ * Phones and small touch tablets: narrow screens, or touch-only devices up to
+ * small-tablet width. Re-evaluates on rotation / resize.
+ */
+const MOBILE_QUERY = '(max-width: 820px), (pointer: coarse) and (hover: none) and (max-width: 1100px)';
+
+export function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches);
+  useEffect(() => {
+    const q = window.matchMedia(MOBILE_QUERY);
+    const on = () => setMobile(q.matches);
+    on();
+    q.addEventListener('change', on);
+    return () => q.removeEventListener('change', on);
+  }, []);
+  return mobile;
+}
+
+/** Long-press (touch) → callback with the press position; returns pointer handlers. */
+export function useLongPress(onLong: (x: number, y: number) => void, ms = 480) {
+  const t = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean } | null>(null);
+  const cancel = () => {
+    if (t.current) clearTimeout(t.current.timer);
+  };
+  return {
+    onPointerDown: (e: ReactPointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      cancel();
+      const st = { x: e.clientX, y: e.clientY, fired: false, timer: setTimeout(() => { st.fired = true; onLong(st.x, st.y); }, ms) };
+      t.current = st;
+    },
+    onPointerMove: (e: ReactPointerEvent) => {
+      if (t.current && Math.hypot(e.clientX - t.current.x, e.clientY - t.current.y) > 10) cancel();
+    },
+    onPointerUp: cancel,
+    onPointerCancel: cancel,
+    /** True if the last press became a long-press (use to swallow the click). */
+    consumed: () => {
+      const f = !!t.current?.fired;
+      if (t.current) t.current.fired = false;
+      return f;
+    },
+  };
 }
