@@ -6,6 +6,9 @@ import type { Location } from '../tax/regions';
 
 export const DRAG_SCENARIO = 'application/x-edi-scenario';
 export const DRAG_SLOT = 'application/x-edi-slot';
+/** Extra drag type carrying the library card id (types are readable during dragover; data isn't). */
+export const DRAG_PARENT_PREFIX = 'application/x-edi-parent-';
+export const DRAG_PARENT = (id: string) => DRAG_PARENT_PREFIX + id.toLowerCase();
 
 export function useLibraryMap() {
   const library = useStore((s) => s.library);

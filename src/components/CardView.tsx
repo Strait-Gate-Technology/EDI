@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from 'reac
 import { VALUE_ID, evaluateCard, fmtUnit, num, type FieldResult } from '../calc';
 import { uid, useStore } from '../store';
 import { FREQUENCIES, KIND_META, PER_YEAR, PERIODS, type CardDef } from '../types';
-import { scrollAndFocus } from './hooks';
+import { DRAG_PARENT, scrollAndFocus } from './hooks';
 import { Icon, InlineName, Menu, cycle } from './ui';
 
 export interface CardViewProps {
@@ -20,6 +20,10 @@ export interface CardViewProps {
   onDuplicate?: () => void;
   onQuickAdd?: () => void;
   quickAddLabel?: string;
+  /** Already linked in the open scenario: quick-add is shown disabled. */
+  quickAddDisabled?: boolean;
+  /** Scenario cards that are still linked: jump to the parent card in the library. */
+  onJumpToParent?: () => void;
   /** Drag payload set when the grip is dragged. */
   drag?: { type: string; id: string };
   /** Drop handler for reordering (scenario cards). */
@@ -124,6 +128,8 @@ function CardViewImpl(p: CardViewProps) {
   const onDragStart = (e: DragEvent) => {
     if (!p.drag) return;
     e.dataTransfer.setData(p.drag.type, p.drag.id);
+    // Lets a scenario refuse a second linked copy while it's still being hovered.
+    if (p.context === 'library') e.dataTransfer.setData(DRAG_PARENT(def.id), '1');
     e.dataTransfer.setData('text/plain', def.name);
     e.dataTransfer.effectAllowed = p.context === 'library' ? 'copy' : 'move';
     if (cardRef.current) e.dataTransfer.setDragImage(cardRef.current, 24, 24);
@@ -190,9 +196,20 @@ function CardViewImpl(p: CardViewProps) {
             </span>
           )}
           {p.onQuickAdd && (
-            <button type="button" className="tool quick-add" onClick={p.onQuickAdd} title={p.quickAddLabel} aria-label={p.quickAddLabel}>
-              <span className="tool-label">Add</span>
+            <button
+              type="button"
+              className="tool quick-add"
+              onClick={p.onQuickAdd}
+              disabled={p.quickAddDisabled}
+              title={p.quickAddLabel}
+              aria-label={p.quickAddLabel}
+            >
               <Icon name="arrow" size={14} />
+            </button>
+          )}
+          {p.onJumpToParent && (
+            <button type="button" className="tool jump" onClick={p.onJumpToParent} title="Edit the parent card in the library" aria-label="Jump to parent card in library">
+              <Icon name="jump" size={14} />
             </button>
           )}
           {p.onDuplicate && (

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import type { SharedProject } from './share';
 import { DEFAULT_LOCATION, sameLocation, type Location } from './tax/regions';
 import type { CardDef, Field, Frequency, Kind, Period, Scenario } from './types';
 
@@ -42,7 +43,10 @@ interface Actions {
   deleteScenario: (id: string) => void;
   setActive: (id: string | null) => void;
 
-  addCardToScenario: (scenarioId: string, libraryId: string) => void;
+  /** Adds a linked copy; returns false if a linked copy of that parent is already there. */
+  addCardToScenario: (scenarioId: string, libraryId: string) => boolean;
+  /** Show a library card (scroll to it, select its name) — e.g. from a linked copy. */
+  jumpToLibraryCard: (id: string) => void;
   updateScenarioCard: (scenarioId: string, cardId: string, fn: (d: CardDef) => void) => void;
   unlinkScenarioCard: (scenarioId: string, cardId: string) => void;
   removeScenarioCard: (scenarioId: string, cardId: string) => void;
@@ -64,6 +68,8 @@ interface Actions {
   clearFocus: (id: string) => void;
   /** Remove every scenario and library card (keeps location / display settings). */
   startOver: () => void;
+  /** Load a shared project: replace everything, or add its cards & scenarios alongside. */
+  importProject: (p: SharedProject, mode: 'replace' | 'add') => void;
 }
 
 export type MobilePane = 'library' | 'scenario';
@@ -77,10 +83,35 @@ export type Store = AppData & Actions & {
 
 export const MIN_COLUMNS = 3;
 
+/** A scenario may hold only one *linked* copy of a library card (unlinked copies are free). */
+export const hasLinkedCopy = (sc: Scenario, parentId: string) =>
+  sc.cards.some((c) => c.linked && c.parentId === parentId);
+
 /** Older saves / exports stored fixed columns with nulls for empty spots. */
 function normaliseAnalysis(a: unknown): AppData['analysis'] {
   const slots = (a as { slots?: unknown[] } | undefined)?.slots ?? [];
   return { slots: [...new Set(slots.filter((x): x is string => typeof x === 'string'))] };
+}
+
+/** Give every id in a shared project a fresh uuid (keeps parent links intact). */
+function reId(p: SharedProject): SharedProject {
+  const map = new Map<string, string>();
+  const id = (old: string) => {
+    let v = map.get(old);
+    if (!v) map.set(old, (v = uid()));
+    return v;
+  };
+  const card = (d: CardDef): CardDef => ({ ...clone(d), id: id(d.id), fields: d.fields.map((f) => ({ ...f, id: uid() })) });
+  return {
+    ...p,
+    library: p.library.map(card),
+    scenarios: p.scenarios.map((sc) => ({
+      ...clone(sc),
+      id: id(sc.id),
+      cards: sc.cards.map((c) => ({ ...c, id: uid(), parentId: c.parentId ? id(c.parentId) : null, def: card(c.def) })),
+    })),
+    stage: p.stage.map(id),
+  };
 }
 
 let nonce = 0;
@@ -295,12 +326,23 @@ export const useStore = create<Store>()(
         }),
       setActive: (id) => set((s) => { s.activeScenarioId = id; s.mobilePane = 'scenario'; }),
 
-      addCardToScenario: (scenarioId, libraryId) =>
+      addCardToScenario: (scenarioId, libraryId) => {
+        const cur = get().scenarios.find((x) => x.id === scenarioId);
+        if (!cur || hasLinkedCopy(cur, libraryId)) return false;
         set((s) => {
           const sc = s.scenarios.find((x) => x.id === scenarioId);
           const d = s.library.find((c) => c.id === libraryId);
           if (!sc || !d) return;
           sc.cards.push({ id: uid(), parentId: d.id, linked: true, def: clone(d) });
+        });
+        return true;
+      },
+      jumpToLibraryCard: (id) =>
+        set((s) => {
+          if (!s.library.some((c) => c.id === id)) return;
+          s.view = 'build';
+          s.mobilePane = 'library';
+          s.focusTarget = focus(id);
         }),
       updateScenarioCard: (scenarioId, cardId, fn) =>
         set((s) => {
@@ -372,6 +414,31 @@ export const useStore = create<Store>()(
           sc.location = { linked: sameLocation(loc, s.location), country: loc.country, region: loc.region };
         }),
       setReduceEffects: (on) => set((s) => { s.reduceEffects = on; }),
+      importProject: (p, mode) =>
+        set((s) => {
+          const fresh = reId(p);
+          if (mode === 'replace') {
+            s.library = fresh.library;
+            s.scenarios = fresh.scenarios;
+            s.location = { ...p.location };
+            s.period = p.period;
+            s.analysis.slots = fresh.stage;
+          } else {
+            // Shared scenarios that followed the sender's default get that location explicitly.
+            for (const sc of fresh.scenarios) {
+              const loc = sc.location.linked ? p.location : sc.location;
+              sc.location = { linked: sameLocation(loc, s.location), country: loc.country, region: loc.region };
+              const names = [...s.scenarios, ...fresh.scenarios.filter((x) => x !== sc)].map((x) => x.name);
+              if (names.includes(sc.name)) sc.name = uniqueCopyName(baseName(sc.name), names);
+            }
+            s.library.push(...fresh.library);
+            s.scenarios.push(...fresh.scenarios);
+          }
+          s.activeScenarioId = fresh.scenarios[0]?.id ?? s.activeScenarioId;
+          s.view = 'build';
+          s.mobilePane = 'scenario';
+          s.focusTarget = null;
+        }),
       startOver: () =>
         set((s) => {
           s.library = [];

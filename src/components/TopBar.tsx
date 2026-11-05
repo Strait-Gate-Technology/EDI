@@ -5,6 +5,7 @@ import { PERIODS } from '../types';
 import { askClearAll, askDeleteScenario, askLoadSample, askStartOver } from './actions';
 import { alertDialog } from './Dialog';
 import { LocationPicker, ScenarioTitle } from './Flag';
+import { openShare } from './Share';
 import { DRAG_SCENARIO, DRAG_SLOT, scrollAndFocus, useAllTotals } from './hooks';
 import { Icon, Menu, cycle } from './ui';
 
@@ -217,6 +218,16 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
             {view === 'analysis' ? 'Back to builder' : 'Analysis'}
           </button>
         )}
+        <button
+          type="button"
+          className="glass-btn icon-btn share-btn"
+          onClick={() => openShare()}
+          disabled={scenarios.length === 0 && library.length === 0}
+          title="Share project (link or QR code)"
+          aria-label="Share project"
+        >
+          <Icon name="share" />
+        </button>
         <Menu
           label="Data"
           align="right"
@@ -227,6 +238,7 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
               hint: 'Stops colour cycling & background drift',
               onClick: () => setReduceEffects(!reduceEffects),
             },
+            { label: 'Share project…', hint: 'Link or QR code with everything', onClick: () => openShare() },
             { label: 'Export JSON', hint: 'Download all cards & scenarios', onClick: exportData },
             { label: 'Import JSON…', hint: 'Replace with an export', onClick: () => fileRef.current?.click() },
             { label: 'Load sample data', hint: 'Replaces current data', onClick: askLoadSample },

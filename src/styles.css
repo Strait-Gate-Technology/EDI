@@ -792,7 +792,6 @@ body.dragging-slot .scenario-tabs { outline: 1.5px dashed hsl(190 90% 75% / 0.55
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tool-label { display: none; }
 .mobile-nav { display: none; }
 
 /* ============================================================
@@ -848,8 +847,7 @@ body.is-mobile .grip { display: none; }
 body.is-mobile .field-remove { opacity: 0.8; position: static; width: 30px; height: 30px; flex: none; }
 body.is-mobile input, body.is-mobile select { font-size: 16px; }
 body.is-mobile .field-input { padding: 8px 10px; }
-body.is-mobile .quick-add { width: auto; padding: 0 8px; gap: 4px; color: var(--text); background: hsl(190 70% 50% / 0.16); border: 1px solid hsl(190 80% 70% / 0.35); opacity: 1; }
-body.is-mobile .tool-label { display: inline; font-size: 12px; font-weight: 600; }
+body.is-mobile .quick-add { color: hsl(190 90% 85%); background: hsl(190 70% 50% / 0.14); border: 1px solid hsl(190 80% 70% / 0.3); opacity: 1; }
 body.is-mobile .flag-pill { height: 34px; }
 
 /* Menus become bottom sheets */
@@ -986,3 +984,38 @@ body.is-mobile .totals:not(.is-open) .totals-warn { display: none; }
   box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.7);
 }
 .stage.is-hover { outline: 2px dashed hsl(190 90% 75% / 0.6); outline-offset: 4px; border-radius: var(--radius); }
+
+/* Duplicate linked parent refused; disabled quick-add; jump-to-parent */
+.zone--duplicate { border-color: hsl(40 95% 65% / 0.75) !important; cursor: not-allowed; }
+.zone--duplicate .zone-hint { color: hsl(40 95% 75%); font-weight: 600; }
+.tool:disabled { opacity: 0.3; cursor: default; background: none; }
+body.is-mobile .quick-add:disabled { opacity: 0.35; }
+.tool.jump:hover { color: hsl(190 95% 80%); }
+
+/* ---------------- Share panel ---------------- */
+.dialog--wide { width: min(560px, 100%); }
+.share { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.share-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.share-url {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid hsl(0 0% 100% / 0.14);
+  background: rgb(0 0 0 / 0.3);
+  font-family: 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+  color: hsl(190 80% 85%);
+  outline: none;
+}
+.share-size { margin-left: auto; }
+.share-qr {
+  align-self: center;
+  width: min(300px, 100%);
+  padding: 10px;
+  border-radius: 14px;
+  background: #fff;
+  line-height: 0;
+}
+.share-qr svg { width: 100%; height: auto; }
+.dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }

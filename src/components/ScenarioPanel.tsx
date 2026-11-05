@@ -7,7 +7,8 @@ import { KINDS, KIND_META, PERIODS, type CardDef, type Kind, type Scenario } fro
 import { askDeleteScenario } from './actions';
 import { CardView } from './CardView';
 import { LocationPicker, LocationSuffix } from './Flag';
-import { scrollAndFocus, useAllTotals, useLibraryMap } from './hooks';
+import { DRAG_PARENT_PREFIX, scrollAndFocus, useAllTotals, useLibraryMap } from './hooks';
+import { toast } from './Dialog';
 import { DRAG_LIB } from './LibraryPanel';
 import { Icon, cycle } from './ui';
 
@@ -166,13 +167,19 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
   const unlink = useStore((s) => s.unlinkScenarioCard);
   const remove = useStore((s) => s.removeScenarioCard);
   const move = useStore((s) => s.moveScenarioCard);
-  const [state, setState] = useState<'idle' | 'accept' | 'reject'>('idle');
+  const jump = useStore((s) => s.jumpToLibraryCard);
+  const [state, setState] = useState<'idle' | 'accept' | 'reject' | 'duplicate'>('idle');
 
   const cards = scenario.cards.filter((c) => effectiveDef(c, lib).kind === kind);
 
-  const classify = (e: DragEvent): 'accept' | 'reject' | null => {
+  const classify = (e: DragEvent): 'accept' | 'reject' | 'duplicate' | null => {
     const types = e.dataTransfer.types;
-    if (types.includes(DRAG_LIB(kind)) || types.includes(DRAG_MOVE(kind))) return 'accept';
+    if (types.includes(DRAG_LIB(kind))) {
+      const parent = types.find((t) => t.startsWith(DRAG_PARENT_PREFIX))?.slice(DRAG_PARENT_PREFIX.length);
+      const dup = parent && scenario.cards.some((c) => c.linked && c.parentId?.toLowerCase() === parent);
+      return dup ? 'duplicate' : 'accept';
+    }
+    if (types.includes(DRAG_MOVE(kind))) return 'accept';
     if (types.some((t) => t.startsWith('application/x-edi-lib-') || t.startsWith('application/x-edi-move-'))) return 'reject';
     return null;
   };
@@ -200,7 +207,7 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
         const moveId = e.dataTransfer.getData(DRAG_MOVE(kind));
         if (libId) {
           e.preventDefault();
-          addCard(scenario.id, libId);
+          if (!addCard(scenario.id, libId)) toast(`“${lib.get(libId)?.name ?? 'That card'}” is already linked in this scenario`);
         } else if (moveId) {
           e.preventDefault();
           move(scenario.id, moveId, null);
@@ -213,7 +220,13 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
           {KIND_META[kind].plural}
         </h3>
         <span className="zone-hint">
-          {state === 'reject' ? `Only ${KIND_META[kind].label.toLowerCase()} cards belong here` : state === 'accept' ? 'Drop to add' : `${cards.length} card${cards.length === 1 ? '' : 's'}`}
+          {state === 'reject'
+            ? `Only ${KIND_META[kind].label.toLowerCase()} cards belong here`
+            : state === 'duplicate'
+              ? 'Already linked here — unlink the existing copy to add another'
+              : state === 'accept'
+                ? 'Drop to add'
+                : `${cards.length} card${cards.length === 1 ? '' : 's'}`}
         </span>
       </div>
       <div className="zone-cards">
@@ -235,6 +248,7 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
               drag={{ type: DRAG_MOVE(kind), id: c.id }}
               dropAccept={DRAG_MOVE(kind)}
               onDropBefore={(dragged) => move(scenario.id, dragged, c.id)}
+              onJumpToParent={linked && c.parentId ? () => jump(c.parentId!) : undefined}
             />
           );
         })}

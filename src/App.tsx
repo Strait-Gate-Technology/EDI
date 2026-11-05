@@ -5,6 +5,7 @@ import { DialogHost, ToastHost } from './components/Dialog';
 import { useIsMobile } from './components/hooks';
 import { LibraryPanel } from './components/LibraryPanel';
 import { ScenarioPanel } from './components/ScenarioPanel';
+import { useIncomingShare } from './components/Share';
 import { TaxNotice } from './components/TaxNotice';
 import { TopBar } from './components/TopBar';
 import { Icon } from './components/ui';
@@ -17,6 +18,7 @@ export default function App() {
   const pane = useStore((s) => s.mobilePane);
   const setPane = useStore((s) => s.setMobilePane);
   const mobile = useIsMobile();
+  useIncomingShare();
 
   useEffect(() => {
     document.body.classList.toggle('calm', reduceEffects);

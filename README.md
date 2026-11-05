@@ -30,6 +30,10 @@ npm run dev      # http://localhost:5178
   state brackets (see *Tax data* below); the *Income tax* card shows the breakdown.
 - **Analysis:** side-by-side columns (1–6). Drag a column onto another to swap, onto the pool or the
   top rack to take it off stage; drag scenarios from the top rack or pool into a column.
+- **Sharing:** the share button (top right) or ☰ → *Share project…* builds a link that contains the
+  whole project (cards, scenarios, tax locations, Analysis stage), compressed into the URL fragment
+  (`#p=…`), so nothing is uploaded. It can also be shown as a QR code. Opening a link offers to add
+  the shared scenarios alongside yours or replace yours.
 - Everything persists in `localStorage`; the ☰ menu exports/imports JSON and has
   *Reduce visual effects* for slower machines.
 

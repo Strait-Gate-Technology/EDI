@@ -24,7 +24,7 @@ export function cycle(seed: string, minSec = 150, maxSec = 480): CSSProperties {
 
 type IconName =
   | 'plus' | 'link' | 'unlink' | 'trash' | 'grip' | 'copy' | 'x' | 'chart' | 'back' | 'arrow'
-  | 'clock' | 'up' | 'down' | 'menu' | 'swap';
+  | 'clock' | 'up' | 'down' | 'menu' | 'swap' | 'jump' | 'share' | 'qr';
 
 const PATHS: Record<IconName, ReactNode> = {
   plus: <path d="M12 5v14M5 12h14" />,
@@ -64,6 +64,15 @@ const PATHS: Record<IconName, ReactNode> = {
   down: <path d="M6 9l6 6 6-6" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   swap: <path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7" />,
+  // corner-up-left: "back to the parent"
+  jump: <path d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5V20" />,
+  share: (
+    <>
+      <circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" />
+      <path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4" />
+    </>
+  ),
+  qr: <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2" />,
 };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useStore } from '../store';
+import { hasLinkedCopy, useStore } from '../store';
 import { KINDS, KIND_META, type Kind } from '../types';
 import { askDeleteLibraryCard } from './actions';
 import { CardView } from './CardView';
@@ -66,8 +66,9 @@ export function LibraryPanel() {
                     onChange={(fn) => update(c.id, fn)}
                     onDuplicate={() => dup(c.id)}
                     onRemove={() => askDeleteLibraryCard(c.id, usage.get(c.id) ?? 0)}
-                    onQuickAdd={active ? () => { addToScenario(active.id, c.id); toast(`Added “${c.name}” to ${active.name}`); } : undefined}
-                    quickAddLabel={active ? `Add to “${active.name}”` : undefined}
+                    onQuickAdd={active ? () => { if (addToScenario(active.id, c.id)) toast(`Added “${c.name}” to ${active.name}`); } : undefined}
+                    quickAddDisabled={!!active && hasLinkedCopy(active, c.id)}
+                    quickAddLabel={active ? (hasLinkedCopy(active, c.id) ? `Already linked in “${active.name}”` : `Add to “${active.name}”`) : undefined}
                     drag={{ type: DRAG_LIB(kind), id: c.id }}
                   />
                 ))}
