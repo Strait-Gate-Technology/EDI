@@ -30,3 +30,14 @@ npm run dev      # http://localhost:5178
 
 Source: `src/formula.ts` (parser), `src/calc.ts` (card & scenario maths), `src/store.ts` (state),
 `src/components/*` (UI), `src/styles.css` (glass + per-component hue cycling).
+
+## Deploy (Vercel)
+
+The app is a static Vite build; `vercel.json` pins the settings.
+
+1. In Vercel: **Add New → Project → Import** `Strait-Gate-Technology/EDI`.
+2. Leave the detected settings (Framework: Vite, build `npm run build`, output `dist`) and **Deploy**.
+
+Every push to `master` then redeploys production, and other branches/PRs get preview URLs.
+Requires Node ≥ 22.12 (Vercel's default Node 22/24 is fine). Data lives in each visitor's
+browser (`localStorage`), so there is no backend or environment variables to configure.
