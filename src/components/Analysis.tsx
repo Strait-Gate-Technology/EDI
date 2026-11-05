@@ -1,6 +1,6 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { fmtUnit, hoursFmt, money, pct, type ScenarioTotals } from '../calc';
-import { useStore } from '../store';
+import { MIN_COLUMNS, useStore } from '../store';
 import { regionName } from '../tax/regions';
 import { KINDS, KIND_META, PERIODS, type Scenario } from '../types';
 import { Flag, ScenarioTitle } from './Flag';
@@ -19,51 +19,63 @@ const endDrag = () => document.body.classList.remove('dragging-scenario', 'dragg
 
 export function Analysis({ mobile = false }: { mobile?: boolean }) {
   const scenarios = useStore((s) => s.scenarios);
-  const { columns, slots } = useStore((s) => s.analysis);
-  const { setColumns, placeInSlot, clearSlot, swapSlots } = useStore.getState();
+  const slots = useStore((s) => s.analysis.slots);
+  const { insertOnStage, clearSlot, swapSlots } = useStore.getState();
   const totals = useAllTotals();
   const [poolHover, setPoolHover] = useState(false);
+  const [stageHover, setStageHover] = useState(false);
 
   const byId = useMemo(() => new Map(scenarios.map((s) => [s.id, s])), [scenarios]);
-  const shown = slots.map((id) => (id && byId.has(id) ? id : null));
+  const shown = slots.filter((id) => byId.has(id));
   const shownKey = shown.join('|');
   const pool = scenarios.filter((s) => !shown.includes(s.id));
+  // Never fewer than MIN_COLUMNS columns; empty spots fill the rest.
+  const count = Math.max(MIN_COLUMNS, shown.length);
+  const cells = Array.from({ length: count }, (_, i) => shown[i] ?? null);
 
   const { ranks, maxes } = useMemo(() => {
-    const vis = shown.filter((x): x is string => !!x);
-    const sorted = [...vis].sort((a, b) => (totals.get(b)!.ediPerHour ?? -Infinity) - (totals.get(a)!.ediPerHour ?? -Infinity));
-    const ts = vis.map((id) => totals.get(id)!);
+    const sorted = [...shown].sort((a, b) => (totals.get(b)!.ediPerHour ?? -Infinity) - (totals.get(a)!.ediPerHour ?? -Infinity));
+    const ts = shown.map((id) => totals.get(id)!);
     const m: Record<string, number> = {};
     for (const met of METRICS) m[met.key] = Math.max(1e-9, ...ts.map((t) => Math.abs(met.get(t))));
     m.eph = Math.max(1e-9, ...ts.map((t) => Math.abs(t.ediPerHour ?? 0)));
     return { ranks: new Map(sorted.map((id, i) => [id, i + 1])), maxes: m };
+    // shownKey stands in for `shown`, which is a new array each render
   }, [shownKey, totals]);
-
-  const firstEmpty = shown.findIndex((x) => !x);
 
   return (
     <div className="analysis">
-      <div className="analysis-bar glass cycle" style={cycle('analysis-bar', 240, 500)}>
-        <div>
-          <h2>Analysis</h2>
-          <p className="muted">
-            {mobile
-              ? 'Swipe sideways between columns · ◀ ▶ reorder · × sends a column to the pool · tap a pool scenario to bring it on stage.'
-              : 'Drag a column onto another to swap, onto the pool or the top rack to take it off stage. Drag scenarios from the top rack or the pool into a column.'}
-          </p>
-        </div>
-        <div className="col-stepper" role="group" aria-label="Number of columns">
-          <button type="button" className="glass-btn icon-btn" onClick={() => setColumns(columns - 1)} disabled={columns <= 1} aria-label="Fewer columns">−</button>
-          <span><b>{columns}</b> columns</span>
-          <button type="button" className="glass-btn icon-btn" onClick={() => setColumns(columns + 1)} disabled={columns >= 6} aria-label="More columns">+</button>
-        </div>
-      </div>
-
-      <div className="stage" style={mobile ? undefined : { gridTemplateColumns: `repeat(${columns}, minmax(250px, 1fr))` }}>
-        {shown.map((id, slot) => {
+      <div
+        className={'stage' + (stageHover ? ' is-hover' : '')}
+        style={mobile ? undefined : { gridTemplateColumns: `repeat(${count}, minmax(250px, 1fr))` }}
+        // Dropping a scenario anywhere else on the stage adds it as a new column at the end.
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(DRAG_SCENARIO)) return;
+          e.preventDefault();
+          setStageHover(true);
+        }}
+        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setStageHover(false)}
+        onDrop={(e) => {
+          setStageHover(false);
+          const sid = e.dataTransfer.getData(DRAG_SCENARIO);
+          if (sid) {
+            e.preventDefault();
+            insertOnStage(shown.length, sid);
+          }
+        }}
+      >
+        {cells.map((id, slot) => {
           const sc = id ? byId.get(id) : undefined;
           return (
-            <Slot key={slot} slot={slot} onDropScenario={(sid) => placeInSlot(slot, sid)} onDropSlot={(from) => swapSlots(from, slot)} filled={!!sc}>
+            <Slot
+              key={id ?? 'empty' + slot}
+              slot={slot}
+              filled={!!sc}
+              // Onto a column: insert there (stage grows); onto an empty spot: fill the next spot.
+              onDropScenario={(sid) => insertOnStage(sc ? slot : shown.length, sid)}
+              onDropSlot={(from) => (sc ? swapSlots(from, slot) : insertOnStage(shown.length, shown[from]))}
+              onDragActive={() => setStageHover(false)}
+            >
               {sc ? (
                 <Column
                   slot={slot}
@@ -79,7 +91,7 @@ export function Analysis({ mobile = false }: { mobile?: boolean }) {
               ) : (
                 <div className="empty-slot-inner">
                   <Icon name="plus" size={22} />
-                  <p>Drag a scenario here</p>
+                  <p>{mobile ? 'Tap a pool scenario to add it' : 'Drag a scenario here'}</p>
                 </div>
               )}
             </Slot>
@@ -105,7 +117,7 @@ export function Analysis({ mobile = false }: { mobile?: boolean }) {
       >
         <h3>Pool <span className="count">{pool.length}</span></h3>
         {pool.length === 0 ? (
-          <p className="muted small">All scenarios are on stage. {mobile ? 'Tap × on a column to free it.' : 'Drag a column here to free it.'}</p>
+          <p className="muted small">All scenarios are on stage.</p>
         ) : (
           <div className="pool-items">
             {pool.map((s) => {
@@ -123,8 +135,8 @@ export function Analysis({ mobile = false }: { mobile?: boolean }) {
                     document.body.classList.add('dragging-scenario');
                   }}
                   onDragEnd={endDrag}
-                  onClick={() => placeInSlot(firstEmpty >= 0 ? firstEmpty : columns - 1, s.id)}
-                  title={firstEmpty >= 0 ? 'Click or drag onto the stage' : 'Drag onto a column to replace it (click replaces the last column)'}
+                  onClick={() => insertOnStage(shown.length, s.id)}
+                  title={mobile ? 'Tap to add to the stage' : 'Click to add as a column, or drag onto the stage'}
                 >
                   <span className="tab-name"><ScenarioTitle scenario={s} /></span>
                   <span className="tab-metric">{t.ediPerHour == null ? '—' : money(t.ediPerHour)}<small>/h</small></span>
@@ -139,34 +151,40 @@ export function Analysis({ mobile = false }: { mobile?: boolean }) {
 }
 
 function Slot({
-  slot, filled, onDropScenario, onDropSlot, children,
+  slot, filled, onDropScenario, onDropSlot, onDragActive, children,
 }: {
   slot: number;
   filled: boolean;
   onDropScenario: (id: string) => void;
   onDropSlot: (from: number) => void;
+  onDragActive: () => void;
   children: React.ReactNode;
 }) {
-  const [hover, setHover] = useState(false);
-  const accepts = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_SCENARIO) || e.dataTransfer.types.includes(DRAG_SLOT);
+  const [hover, setHover] = useState<'' | 'insert' | 'swap' | 'fill'>('');
   return (
     <div
-      className={'slot drop-target' + (filled ? '' : ' slot--empty') + (hover ? ' is-hover' : '')}
+      className={'slot drop-target' + (filled ? '' : ' slot--empty') + (hover ? ' is-hover is-' + hover : '')}
       onDragOver={(e) => {
-        if (!accepts(e)) return;
+        const t = e.dataTransfer.types;
+        const kind = t.includes(DRAG_SCENARIO) ? (filled ? 'insert' : 'fill') : t.includes(DRAG_SLOT) ? (filled ? 'swap' : 'fill') : '';
+        if (!kind) return;
         e.preventDefault();
-        setHover(true);
+        e.stopPropagation();
+        onDragActive();
+        if (hover !== kind) setHover(kind);
       }}
-      onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setHover(false)}
+      onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setHover('')}
       onDrop={(e) => {
-        setHover(false);
+        setHover('');
         const sid = e.dataTransfer.getData(DRAG_SCENARIO);
         const from = e.dataTransfer.getData(DRAG_SLOT);
-        if (sid) { e.preventDefault(); onDropScenario(sid); }
-        else if (from !== '' && Number(from) !== slot) { e.preventDefault(); onDropSlot(Number(from)); }
+        if (sid) { e.preventDefault(); e.stopPropagation(); onDropScenario(sid); }
+        else if (from !== '' && Number(from) !== slot) { e.preventDefault(); e.stopPropagation(); onDropSlot(Number(from)); }
       }}
     >
       {children}
+      {hover === 'insert' && <span className="drop-label">Add as a new column here</span>}
+      {hover === 'swap' && <span className="drop-label">Swap columns</span>}
     </div>
   );
 }

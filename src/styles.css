@@ -542,11 +542,6 @@ body.dragging-hours .zone--hours {
 
 /* ---------------- Analysis ---------------- */
 .analysis { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; min-height: 0; }
-.analysis-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; }
-.analysis-bar h2 { font-size: 18px; }
-.analysis-bar p { font-size: 12px; margin-top: 2px; }
-.col-stepper { display: flex; align-items: center; gap: 10px; font-size: 13px; white-space: nowrap; }
-.col-stepper .glass-btn { font-size: 18px; }
 .stage {
   display: grid;
   gap: 14px;
@@ -877,8 +872,6 @@ body.is-mobile .flag-list { max-height: 55dvh; }
 
 /* Analysis: full-width columns you swipe between */
 body.is-mobile .analysis { gap: 8px; }
-body.is-mobile .analysis-bar { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; }
-body.is-mobile .col-stepper { justify-content: space-between; }
 body.is-mobile .stage {
   grid-auto-flow: column;
   grid-auto-columns: 88%;
@@ -972,3 +965,24 @@ body.is-mobile .totals:not(.is-open) .totals-warn { display: none; }
 .col-head h3.fit-title.is-two-line { order: 10; flex: 1 1 100%; }
 .col-head .col-tools { margin-left: auto; }
 .fit-title.tag-wraps .loc-suffix { white-space: normal; flex-wrap: wrap; flex: 1 1 100%; }
+
+/* Analysis stage: no header bar; drop feedback */
+.analysis { grid-template-rows: minmax(0, 1fr) auto; }
+.slot { position: relative; }
+.slot.is-insert { box-shadow: inset 4px 0 0 hsl(190 95% 70%), 0 0 30px -8px hsl(190 90% 60% / 0.6); }
+.drop-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 8px 14px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  background: hsl(195 70% 18% / 0.95);
+  border: 1px solid hsl(190 90% 70% / 0.6);
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.7);
+}
+.stage.is-hover { outline: 2px dashed hsl(190 90% 75% / 0.6); outline-offset: 4px; border-radius: var(--radius); }

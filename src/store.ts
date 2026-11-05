@@ -15,7 +15,9 @@ export interface AppData {
   activeScenarioId: string | null;
   view: View;
   period: Period;
-  analysis: { columns: number; slots: (string | null)[] };
+  /** Scenarios on the Analysis stage, left to right. The stage always shows at least
+   *  MIN_COLUMNS columns (empty spots fill the rest) and grows as more are dropped in. */
+  analysis: { slots: string[] };
   /** App-wide default nation / province-or-state. */
   location: Location;
   /** Turn off colour cycling & drifting background (for slower machines). */
@@ -48,9 +50,10 @@ interface Actions {
 
   setView: (v: View) => void;
   setPeriod: (p: Period) => void;
-  setColumns: (n: number) => void;
-  placeInSlot: (slot: number, scenarioId: string) => void;
-  clearSlot: (slot: number) => void;
+  /** Put a scenario on stage at `index` (moving it if already there); past the end = append. */
+  insertOnStage: (index: number, scenarioId: string) => void;
+  /** Take the scenario at `index` off stage; the stage closes the gap. */
+  clearSlot: (index: number) => void;
   swapSlots: (a: number, b: number) => void;
 
   replaceAll: (data: AppData) => void;
@@ -72,6 +75,14 @@ export type Store = AppData & Actions & {
   setMobilePane: (p: MobilePane) => void;
 };
 
+export const MIN_COLUMNS = 3;
+
+/** Older saves / exports stored fixed columns with nulls for empty spots. */
+function normaliseAnalysis(a: unknown): AppData['analysis'] {
+  const slots = (a as { slots?: unknown[] } | undefined)?.slots ?? [];
+  return { slots: [...new Set(slots.filter((x): x is string => typeof x === 'string'))] };
+}
+
 let nonce = 0;
 const focus = (id: string): FocusTarget => ({ id, nonce: ++nonce });
 
@@ -91,7 +102,7 @@ function card(kind: Kind, name: string, value: string, frequency: Frequency, ext
 export function emptyData(): AppData {
   return {
     library: [], scenarios: [], activeScenarioId: null, view: 'build', period: 'monthly',
-    analysis: { columns: 3, slots: [null, null, null] }, location: { ...DEFAULT_LOCATION }, reduceEffects: false,
+    analysis: { slots: [] }, location: { ...DEFAULT_LOCATION }, reduceEffects: false,
   };
 }
 
@@ -135,7 +146,7 @@ export function sampleData(): AppData {
     activeScenarioId: scenarios[0].id,
     view: 'build',
     period: 'monthly',
-    analysis: { columns: 3, slots: scenarios.map((s) => s.id) },
+    analysis: { slots: scenarios.map((s) => s.id) },
     location: { ...DEFAULT_LOCATION },
     reduceEffects: false,
   };
@@ -279,7 +290,7 @@ export const useStore = create<Store>()(
           const i = s.scenarios.findIndex((x) => x.id === id);
           if (i < 0) return;
           s.scenarios.splice(i, 1);
-          s.analysis.slots = s.analysis.slots.map((x) => (x === id ? null : x));
+          s.analysis.slots = s.analysis.slots.filter((x) => x !== id);
           if (s.activeScenarioId === id) s.activeScenarioId = s.scenarios[Math.min(i, s.scenarios.length - 1)]?.id ?? null;
         }),
       setActive: (id) => set((s) => { s.activeScenarioId = id; s.mobilePane = 'scenario'; }),
@@ -325,37 +336,32 @@ export const useStore = create<Store>()(
       setView: (v) =>
         set((s) => {
           s.view = v;
-          if (v === 'analysis' && s.analysis.slots.every((x) => x === null || !s.scenarios.some((sc) => sc.id === x))) {
-            s.analysis.slots = s.analysis.slots.map((_, i) => s.scenarios[i]?.id ?? null);
-          }
+          if (v !== 'analysis') return;
+          s.analysis.slots = s.analysis.slots.filter((x) => s.scenarios.some((sc) => sc.id === x));
+          // First visit with nothing on stage: start with the first few scenarios.
+          if (s.analysis.slots.length === 0) s.analysis.slots = s.scenarios.slice(0, MIN_COLUMNS).map((sc) => sc.id);
         }),
       setPeriod: (p) => set((s) => { s.period = p; }),
-      setColumns: (n) =>
+      insertOnStage: (index, scenarioId) =>
         set((s) => {
-          const cols = Math.max(1, Math.min(6, n));
-          const slots = s.analysis.slots.slice(0, cols);
-          while (slots.length < cols) {
-            const free = s.scenarios.find((sc) => !slots.includes(sc.id));
-            slots.push(free?.id ?? null);
-          }
-          s.analysis.columns = cols;
-          s.analysis.slots = slots;
-        }),
-      placeInSlot: (slot, scenarioId) =>
-        set((s) => {
+          if (!s.scenarios.some((sc) => sc.id === scenarioId)) return;
           const slots = s.analysis.slots;
           const existing = slots.indexOf(scenarioId);
-          if (existing >= 0 && existing !== slot) slots[existing] = slots[slot];
-          slots[slot] = scenarioId;
+          if (existing >= 0) {
+            slots.splice(existing, 1);
+            if (existing < index) index--;
+          }
+          slots.splice(Math.max(0, Math.min(index, slots.length)), 0, scenarioId);
         }),
-      clearSlot: (slot) => set((s) => { s.analysis.slots[slot] = null; }),
+      clearSlot: (index) => set((s) => { s.analysis.slots.splice(index, 1); }),
       swapSlots: (a, b) =>
         set((s) => {
           const slots = s.analysis.slots;
+          if (a < 0 || b < 0 || a >= slots.length || b >= slots.length) return;
           [slots[a], slots[b]] = [slots[b], slots[a]];
         }),
 
-      replaceAll: (data) => set(() => ({ ...emptyData(), ...data })),
+      replaceAll: (data) => set(() => ({ ...emptyData(), ...data, analysis: normaliseAnalysis(data.analysis) })),
 
       setLocation: (loc) => set((s) => { s.location = { ...loc }; }),
       setScenarioLocation: (id, loc) =>
@@ -372,14 +378,14 @@ export const useStore = create<Store>()(
           s.scenarios = [];
           s.activeScenarioId = null;
           s.view = 'build';
-          s.analysis.slots = s.analysis.slots.map(() => null);
+          s.analysis.slots = [];
           s.focusTarget = null;
         }),
       clearFocus: (id) => set((s) => { if (s.focusTarget?.id === id) s.focusTarget = null; }),
     })),
     {
       name: 'edi-app',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => debouncedStorage()),
       migrate: (persisted, version) => {
         const d = persisted as AppData & { scenarios: (Scenario & { taxRate?: number })[] };
@@ -391,6 +397,7 @@ export const useStore = create<Store>()(
             sc.location ??= { linked: true, ...d.location };
           }
         }
+        if (version < 3) d.analysis = normaliseAnalysis(d.analysis);
         return d;
       },
       partialize: (s): AppData => ({
