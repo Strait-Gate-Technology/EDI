@@ -1,0 +1,52 @@
+{
+  "checkedAt": "2026-11-05T22:10:52.708Z",
+  "dataYear": 2026,
+  "ok": true,
+  "problems": [],
+  "sources": [
+    {
+      "id": "cra-t4127-jan",
+      "label": "CRA T4127 Payroll Deductions Formulas, 122nd ed. (Jan 1, 2026), Table 8.1",
+      "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/rtsncmtrshldcnstnt-01-26e.csv",
+      "required": true,
+      "status": "ok"
+    },
+    {
+      "id": "cra-t4127-jul",
+      "label": "CRA T4127 Payroll Deductions Formulas, 123rd ed. (Jul 1, 2026), Table 8.1",
+      "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jul/rates-income-thresholds-constants-26e.csv",
+      "required": true,
+      "status": "ok"
+    },
+    {
+      "id": "cra-t4127-index",
+      "label": "CRA T4127 edition index (watches for a newer edition)",
+      "url": "https://www.canada.ca/en/revenue-agency/services/forms-publications/payroll/t4127-payroll-deductions-formulas.html",
+      "required": true,
+      "status": "ok"
+    },
+    {
+      "id": "revenu-quebec",
+      "label": "Revenu Québec — Income tax rates",
+      "url": "https://www.revenuquebec.ca/en/citizens/income-tax-return/completing-your-income-tax-return/income-tax-rates/",
+      "required": false,
+      "note": "Revenu Québec refuses automated requests; verified manually on 2026-11-05.",
+      "status": "unreachable",
+      "detail": "HTTP 403"
+    },
+    {
+      "id": "irs-2026",
+      "label": "IRS — Tax inflation adjustments for tax year 2026 (IR-2025-103)",
+      "url": "https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill",
+      "required": true,
+      "status": "ok"
+    },
+    {
+      "id": "taxfoundation-states-2026",
+      "label": "Tax Foundation — State Individual Income Tax Rates and Brackets, as of January 1, 2026",
+      "url": "https://taxfoundation.org/data/all/state/state-income-tax-rates-2026/",
+      "required": true,
+      "status": "ok"
+    }
+  ]
+}

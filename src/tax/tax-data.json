@@ -1,0 +1,145 @@
+{
+  "year": 2026,
+  "compiled": "2026-11-05",
+  "assumptions": [
+    "Single filer, no dependants, under 65, resident all year",
+    "All taxable income treated as ordinary employment income",
+    "Canada: basic personal amount (+ Canada employment amount) credits only; Ontario surtax, Health Premium and low-income reduction, BC tax reduction and Quebec abatement included",
+    "U.S.: federal standard deduction; state standard deduction / personal exemption as published; no itemizing, local or city taxes",
+    "Payroll contributions (CPP/QPP, EI, QPIP, Social Security, Medicare) are not included"
+  ],
+  "sources": [
+    {
+      "id": "cra-t4127-jan",
+      "label": "CRA T4127 Payroll Deductions Formulas, 122nd ed. (Jan 1, 2026), Table 8.1",
+      "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jan/rtsncmtrshldcnstnt-01-26e.csv",
+      "required": true,
+      "expect": ["58,523", "117,045", "181,440", "258,482", "61,200", "154,259", "185,111", "246,813", "370,220", "50,363", "100,728", "115,648", "140,430", "190,405", "265,545", "47,000", "52,333", "104,666", "193,861", "44,678", "89,354", "159,528", "223,340", "285,319", "570,638", "1,141,275", "30,995", "61,991", "97,417", "157,124", "53,003", "106,009", "172,346", "55,801", "111,602", "181,439", "53,891", "107,785", "33,928", "65,820", "106,890", "142,520", "54,532", "155,805"]
+    },
+    {
+      "id": "cra-t4127-jul",
+      "label": "CRA T4127 Payroll Deductions Formulas, 123rd ed. (Jul 1, 2026), Table 8.1",
+      "url": "https://www.canada.ca/content/dam/cra-arc/formspubs/pub/t4127-jul/rates-income-thresholds-constants-26e.csv",
+      "required": true,
+      "expect": ["58,523", "200,000", "142,520", "265,545"]
+    },
+    {
+      "id": "cra-t4127-index",
+      "label": "CRA T4127 edition index (watches for a newer edition)",
+      "url": "https://www.canada.ca/en/revenue-agency/services/forms-publications/payroll/t4127-payroll-deductions-formulas.html",
+      "required": true,
+      "expect": ["2026"],
+      "newerEditionPattern": "Effective January 1, {next}"
+    },
+    {
+      "id": "revenu-quebec",
+      "label": "Revenu Québec — Income tax rates",
+      "url": "https://www.revenuquebec.ca/en/citizens/income-tax-return/completing-your-income-tax-return/income-tax-rates/",
+      "required": false,
+      "note": "Revenu Québec refuses automated requests; verified manually on 2026-11-05.",
+      "expect": ["54,345", "108,680", "132,245", "25.75"]
+    },
+    {
+      "id": "irs-2026",
+      "label": "IRS — Tax inflation adjustments for tax year 2026 (IR-2025-103)",
+      "url": "https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill",
+      "required": true,
+      "expect": ["16,100", "12,400", "50,400", "105,700", "201,775", "256,225", "640,600"]
+    },
+    {
+      "id": "taxfoundation-states-2026",
+      "label": "Tax Foundation — State Individual Income Tax Rates and Brackets, as of January 1, 2026",
+      "url": "https://taxfoundation.org/data/all/state/state-income-tax-rates-2026/",
+      "required": true,
+      "expect": ["11,079", "742,953", "27,399", "64,849", "1,083,150", "33,310", "109,430", "203,150", "4,130", "24,760", "80,650", "215,400", "1,077,550", "82,050", "186,450", "49,400", "119,700", "15,110", "51,950", "332,720"]
+    }
+  ],
+  "CA": {
+    "federal": {
+      "brackets": [[0, 0.14], [58523, 0.205], [117045, 0.26], [181440, 0.29], [258482, 0.33]],
+      "bpa": { "max": 16452, "min": 14829, "phaseFrom": 181440, "phaseTo": 258482 },
+      "employmentAmount": 1501,
+      "quebecAbatement": 0.165
+    },
+    "regions": {
+      "AB": { "brackets": [[0, 0.08], [61200, 0.10], [154259, 0.12], [185111, 0.13], [246813, 0.14], [370220, 0.15]], "bpa": 22769 },
+      "BC": { "brackets": [[0, 0.056], [50363, 0.077], [100728, 0.105], [115648, 0.1229], [140430, 0.147], [190405, 0.168], [265545, 0.205]], "bpa": 13216,
+              "reduction": { "amount": 690, "phaseFrom": 25570, "rate": 0.0356 },
+              "note": "Annual 2026 lowest rate 5.60% and reduction $690 (T4127 Jul 2026, non-prorated)" },
+      "MB": { "brackets": [[0, 0.108], [47000, 0.1275], [100000, 0.174]], "bpa": 15780, "bpaPhaseOut": { "from": 200000, "to": 400000 } },
+      "NB": { "brackets": [[0, 0.094], [52333, 0.14], [104666, 0.16], [193861, 0.195]], "bpa": 13664 },
+      "NL": { "brackets": [[0, 0.087], [44678, 0.145], [89354, 0.158], [159528, 0.178], [223340, 0.198], [285319, 0.208], [570638, 0.213], [1141275, 0.218]], "bpa": 13094 },
+      "NS": { "brackets": [[0, 0.0879], [30995, 0.1495], [61991, 0.1667], [97417, 0.175], [157124, 0.21]], "bpa": 11932 },
+      "NT": { "brackets": [[0, 0.059], [53003, 0.086], [106009, 0.122], [172346, 0.1405]], "bpa": 18198 },
+      "NU": { "brackets": [[0, 0.04], [55801, 0.07], [111602, 0.09], [181439, 0.115]], "bpa": 19659 },
+      "ON": { "brackets": [[0, 0.0505], [53891, 0.0915], [107785, 0.1116], [150000, 0.1216], [220000, 0.1316]], "bpa": 12989,
+              "surtax": [[5818, 0.20], [7446, 0.36]],
+              "lowIncomeReduction": 300,
+              "healthPremium": [[20000, 0.06, 0, 300], [36000, 0.06, 300, 450], [48000, 0.25, 450, 600], [72000, 0.25, 600, 750], [200000, 0.25, 750, 900]] },
+      "PE": { "brackets": [[0, 0.095], [33928, 0.1347], [65820, 0.166], [106890, 0.1762], [142520, 0.19], [200000, 0.20]], "bpa": 15000 },
+      "QC": { "brackets": [[0, 0.14], [54345, 0.19], [108680, 0.24], [132245, 0.2575]], "bpa": 18952,
+              "note": "Brackets from Revenu Québec; basic personal amount 18,952 derived from 2025 amount (18,571) × 2026 indexation (2.05%) — not verified against a published figure." },
+      "SK": { "brackets": [[0, 0.105], [54532, 0.125], [155805, 0.145]], "bpa": 20381 },
+      "YT": { "brackets": [[0, 0.064], [58523, 0.09], [117045, 0.109], [181440, 0.128], [500000, 0.15]], "bpa": "federal", "employmentAmount": true }
+    }
+  },
+  "US": {
+    "federal": {
+      "standardDeduction": 16100,
+      "brackets": [[0, 0.10], [12400, 0.12], [50400, 0.22], [105700, 0.24], [201775, 0.32], [256225, 0.35], [640600, 0.37]]
+    },
+    "regions": {
+      "AL": { "brackets": [[0, 0.02], [500, 0.04], [3000, 0.05]], "deduction": 4500 },
+      "AK": { "brackets": [] },
+      "AZ": { "brackets": [[0, 0.025]], "deduction": 8350 },
+      "AR": { "brackets": [[0, 0.02], [4600, 0.039]], "deduction": 2470, "credit": 29 },
+      "CA": { "brackets": [[0, 0.01], [11079, 0.02], [26264, 0.04], [41452, 0.06], [57542, 0.08], [72724, 0.093], [371479, 0.103], [445771, 0.113], [742953, 0.123], [1000000, 0.133]], "deduction": 5540, "credit": 153 },
+      "CO": { "brackets": [[0, 0.044]], "deduction": 16100 },
+      "CT": { "brackets": [[0, 0.02], [10000, 0.045], [50000, 0.055], [100000, 0.06], [200000, 0.065], [250000, 0.069], [500000, 0.0699]], "deduction": 15000 },
+      "DE": { "brackets": [[0, 0], [2000, 0.022], [5000, 0.039], [10000, 0.048], [20000, 0.052], [25000, 0.0555], [60000, 0.066]], "deduction": 3250, "credit": 110 },
+      "DC": { "brackets": [[0, 0.04], [10000, 0.06], [40000, 0.065], [60000, 0.085], [250000, 0.0925], [500000, 0.0975], [1000000, 0.1075]], "deduction": 16100 },
+      "FL": { "brackets": [] },
+      "GA": { "brackets": [[0, 0.0519]], "deduction": 12000 },
+      "HI": { "brackets": [[0, 0.014], [9600, 0.032], [14400, 0.055], [19200, 0.064], [24000, 0.068], [36000, 0.072], [48000, 0.076], [125000, 0.079], [175000, 0.0825], [225000, 0.09], [275000, 0.10], [325000, 0.11]], "deduction": 5544 },
+      "ID": { "brackets": [[0, 0], [4811, 0.053]], "deduction": 16100 },
+      "IL": { "brackets": [[0, 0.0495]], "deduction": 2925 },
+      "IN": { "brackets": [[0, 0.0295]], "deduction": 1000 },
+      "IA": { "brackets": [[0, 0.038]], "deduction": 16100, "credit": 40 },
+      "KS": { "brackets": [[0, 0.052], [23000, 0.0558]], "deduction": 12765 },
+      "KY": { "brackets": [[0, 0.035]], "deduction": 3360 },
+      "LA": { "brackets": [[0, 0.03]], "deduction": 12875 },
+      "ME": { "brackets": [[0, 0.058], [27399, 0.0675], [64849, 0.0715]], "deduction": 13650 },
+      "MD": { "brackets": [[0, 0.02], [1000, 0.03], [2000, 0.04], [3000, 0.0475], [100000, 0.05], [125000, 0.0525], [150000, 0.055], [250000, 0.0575], [500000, 0.0625], [1000000, 0.065]], "deduction": 6550 },
+      "MA": { "brackets": [[0, 0.05], [1083150, 0.09]], "deduction": 4400 },
+      "MI": { "brackets": [[0, 0.0425]], "deduction": 5900 },
+      "MN": { "brackets": [[0, 0.0535], [33310, 0.068], [109430, 0.0785], [203150, 0.0985]], "deduction": 15300 },
+      "MS": { "brackets": [[0, 0], [10000, 0.04]], "deduction": 8300 },
+      "MO": { "brackets": [[0, 0], [1348, 0.02], [2696, 0.025], [4044, 0.03], [5392, 0.035], [6740, 0.04], [8088, 0.045], [9436, 0.047]], "deduction": 16100 },
+      "MT": { "brackets": [[0, 0.047], [47500, 0.0565]], "deduction": 16100 },
+      "NE": { "brackets": [[0, 0.0246], [4130, 0.0351], [24760, 0.0455]], "deduction": 8850, "credit": 176 },
+      "NV": { "brackets": [] },
+      "NH": { "brackets": [] },
+      "NJ": { "brackets": [[0, 0.014], [20000, 0.0175], [35000, 0.035], [40000, 0.0553], [75000, 0.0637], [500000, 0.0897], [1000000, 0.1075]], "deduction": 1000 },
+      "NM": { "brackets": [[0, 0.015], [5500, 0.032], [16500, 0.043], [33500, 0.047], [66500, 0.049], [210000, 0.059]], "deduction": 16100 },
+      "NY": { "brackets": [[0, 0.039], [8500, 0.044], [11700, 0.0515], [13900, 0.054], [80650, 0.059], [215400, 0.0685], [1077550, 0.0965], [5000000, 0.103], [25000000, 0.109]], "deduction": 8000 },
+      "NC": { "brackets": [[0, 0.0399]], "deduction": 12750 },
+      "ND": { "brackets": [[0, 0], [48475, 0.0195], [244825, 0.025]], "deduction": 16100, "note": "Tax Foundation used 2025 bracket widths (2026 not yet published)" },
+      "OH": { "brackets": [[0, 0], [26050, 0.0275]], "deduction": 2400 },
+      "OK": { "brackets": [[0, 0], [3750, 0.025], [4900, 0.035], [7200, 0.045]], "deduction": 7350 },
+      "OR": { "brackets": [[0, 0.0475], [4550, 0.0675], [11400, 0.0875], [125000, 0.099]], "deduction": 2910, "credit": 256 },
+      "PA": { "brackets": [[0, 0.0307]] },
+      "RI": { "brackets": [[0, 0.0375], [82050, 0.0475], [186450, 0.0599]], "deduction": 16450 },
+      "SC": { "brackets": [[0, 0], [3640, 0.03], [18230, 0.06]], "deduction": 8350 },
+      "SD": { "brackets": [] },
+      "TN": { "brackets": [] },
+      "TX": { "brackets": [] },
+      "UT": { "brackets": [[0, 0.045]], "credit": 966 },
+      "VT": { "brackets": [[0, 0.0335], [49400, 0.066], [119700, 0.076], [249700, 0.0875]], "deduction": 12950, "note": "Tax Foundation used 2025 widths and deduction for Vermont (2026 not yet published)" },
+      "VA": { "brackets": [[0, 0.02], [3000, 0.03], [5000, 0.05], [17000, 0.0575]], "deduction": 9680 },
+      "WA": { "brackets": [], "note": "No tax on wage income (capital-gains tax only)" },
+      "WV": { "brackets": [[0, 0.0222], [10000, 0.0296], [25000, 0.0333], [40000, 0.0444], [60000, 0.0482]], "deduction": 2000 },
+      "WI": { "brackets": [[0, 0.035], [15110, 0.044], [51950, 0.053], [332720, 0.0765]], "deduction": 14660 },
+      "WY": { "brackets": [] }
+    }
+  }
+}

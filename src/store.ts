@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { DEFAULT_LOCATION, sameLocation, type Location } from './tax/regions';
 import type { CardDef, Field, Frequency, Kind, Period, Scenario } from './types';
 
 export const uid = (): string =>
@@ -15,6 +16,16 @@ export interface AppData {
   view: View;
   period: Period;
   analysis: { columns: number; slots: (string | null)[] };
+  /** App-wide default nation / province-or-state. */
+  location: Location;
+  /** Turn off colour cycling & drifting background (for slower machines). */
+  reduceEffects: boolean;
+}
+
+/** Something just created that the UI should scroll to and focus. Not persisted. */
+export interface FocusTarget {
+  id: string;
+  nonce: number;
 }
 
 interface Actions {
@@ -43,9 +54,24 @@ interface Actions {
   swapSlots: (a: number, b: number) => void;
 
   replaceAll: (data: AppData) => void;
+
+  setLocation: (loc: Location) => void;
+  setScenarioLocation: (id: string, loc: Location) => void;
+  setReduceEffects: (on: boolean) => void;
+  clearFocus: (id: string) => void;
+  /** Remove every scenario and library card (keeps location / display settings). */
+  startOver: () => void;
 }
 
-export type Store = AppData & Actions;
+export type Store = AppData & Actions & { focusTarget: FocusTarget | null };
+
+let nonce = 0;
+const focus = (id: string): FocusTarget => ({ id, nonce: ++nonce });
+
+/** Location a scenario actually uses (linked scenarios follow the app-wide one). */
+export function scenarioLocation(s: Scenario, global: Location): Location {
+  return s.location.linked ? global : { country: s.location.country, region: s.location.region };
+}
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -56,7 +82,10 @@ function card(kind: Kind, name: string, value: string, frequency: Frequency, ext
 }
 
 export function emptyData(): AppData {
-  return { library: [], scenarios: [], activeScenarioId: null, view: 'build', period: 'monthly', analysis: { columns: 3, slots: [null, null, null] } };
+  return {
+    library: [], scenarios: [], activeScenarioId: null, view: 'build', period: 'monthly',
+    analysis: { columns: 3, slots: [null, null, null] }, location: { ...DEFAULT_LOCATION }, reduceEffects: false,
+  };
 }
 
 export function sampleData(): AppData {
@@ -87,10 +116,11 @@ export function sampleData(): AppData {
   const library = [salary, contract, commuter, insurance, gas, parking, transit, office, work, contractHours, drive, ride, meal];
   const place = (d: CardDef) => ({ id: uid(), parentId: d.id, linked: true, def: clone(d) });
 
+  const loc = () => ({ linked: true, ...DEFAULT_LOCATION });
   const scenarios: Scenario[] = [
-    { id: uid(), name: 'Office · Driving', taxRate: 26, cards: [salary, insurance, gas, parking, work, drive, meal].map(place) },
-    { id: uid(), name: 'Office · Transit', taxRate: 26, cards: [salary, commuter, transit, work, ride, meal].map(place) },
-    { id: uid(), name: 'Remote contract', taxRate: 30, cards: [contract, office, contractHours].map(place) },
+    { id: uid(), name: 'Office · Driving', location: loc(), cards: [salary, insurance, gas, parking, work, drive, meal].map(place) },
+    { id: uid(), name: 'Office · Transit', location: loc(), cards: [salary, commuter, transit, work, ride, meal].map(place) },
+    { id: uid(), name: 'Remote contract', location: { linked: false, country: 'CA', region: 'ON' }, cards: [contract, office, contractHours].map(place) },
   ];
   return {
     library,
@@ -99,7 +129,50 @@ export function sampleData(): AppData {
     view: 'build',
     period: 'monthly',
     analysis: { columns: 3, slots: scenarios.map((s) => s.id) },
+    location: { ...DEFAULT_LOCATION },
+    reduceEffects: false,
   };
+}
+
+/** localStorage writes are debounced so typing doesn't serialise the whole state per keystroke. */
+function debouncedStorage(delay = 400): StateStorage {
+  const pending = new Map<string, string>();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const flush = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    for (const [k, v] of pending) {
+      try { localStorage.setItem(k, v); } catch { /* quota / private mode */ }
+    }
+    pending.clear();
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flush());
+  }
+  return {
+    getItem: (k) => pending.get(k) ?? localStorage.getItem(k),
+    setItem: (k, v) => {
+      pending.set(k, v);
+      clearTimeout(timer);
+      timer = setTimeout(flush, delay);
+    },
+    removeItem: (k) => {
+      pending.delete(k);
+      localStorage.removeItem(k);
+    },
+  };
+}
+
+/** "Commute (3)" → "Commute" (also strips the old " (copy)" suffix). */
+export const baseName = (name: string) => name.replace(/\s*\((?:\d+|copy)\)\s*$/i, '').trim();
+
+/** First free "Name (n)", n ≥ 2. */
+export function uniqueCopyName(base: string, existing: string[]): string {
+  const taken = new Set(existing.map((n) => n.trim().toLowerCase()));
+  let n = 2;
+  while (taken.has(`${base} (${n})`.toLowerCase())) n++;
+  return `${base} (${n})`;
 }
 
 function nextName(existing: string[], base: string): string {
@@ -118,10 +191,14 @@ export const useStore = create<Store>()(
   persist(
     immer((set, get) => ({
       ...sampleData(),
+      focusTarget: null,
 
       addLibraryCard: (kind) => {
         const d = card(kind, DEFAULTS[kind].name, '0', DEFAULTS[kind].frequency);
-        set((s) => { s.library.push(d); });
+        set((s) => {
+          s.library.push(d);
+          s.focusTarget = focus(d.id);
+        });
         return d.id;
       },
       updateLibraryCard: (id, fn) =>
@@ -139,6 +216,7 @@ export const useStore = create<Store>()(
           copy.fields.forEach((f: Field) => (f.id = uid()));
           // keep formulas pointing at names, which are preserved
           s.library.splice(i + 1, 0, copy);
+          s.focusTarget = focus(copy.id);
         }),
       deleteLibraryCard: (id) =>
         set((s) => {
@@ -156,9 +234,10 @@ export const useStore = create<Store>()(
       addScenario: () => {
         const id = uid();
         set((s) => {
-          s.scenarios.push({ id, name: nextName(s.scenarios.map((x) => x.name), 'Scenario'), taxRate: 25, cards: [] });
+          s.scenarios.push({ id, name: nextName(s.scenarios.map((x) => x.name), 'Scenario'), location: { linked: true, ...s.location }, cards: [] });
           s.activeScenarioId = id;
           s.view = 'build';
+          s.focusTarget = focus(id);
         });
         return id;
       },
@@ -173,10 +252,15 @@ export const useStore = create<Store>()(
           if (i < 0) return;
           const copy: Scenario = clone(s.scenarios[i]);
           copy.id = uid();
-          copy.name = copy.name + ' (copy)';
+          const base = baseName(copy.name);
+          copy.name = uniqueCopyName(base, s.scenarios.map((x) => x.name));
           copy.cards.forEach((c) => (c.id = uid()));
-          s.scenarios.splice(i + 1, 0, copy);
+          // Place it after the last scenario of the same family: A, A (2), A (3)…
+          let at = i;
+          s.scenarios.forEach((x, j) => { if (baseName(x.name) === base) at = Math.max(at, j); });
+          s.scenarios.splice(at + 1, 0, copy);
           s.activeScenarioId = copy.id;
+          s.focusTarget = focus(copy.id);
         }),
       deleteScenario: (id) =>
         set((s) => {
@@ -259,11 +343,44 @@ export const useStore = create<Store>()(
           [slots[a], slots[b]] = [slots[b], slots[a]];
         }),
 
-      replaceAll: (data) => set(() => ({ ...data })),
+      replaceAll: (data) => set(() => ({ ...emptyData(), ...data })),
+
+      setLocation: (loc) => set((s) => { s.location = { ...loc }; }),
+      setScenarioLocation: (id, loc) =>
+        set((s) => {
+          const sc = s.scenarios.find((x) => x.id === id);
+          if (!sc) return;
+          // Matching the app-wide default re-links it (and drops the name suffix).
+          sc.location = { linked: sameLocation(loc, s.location), country: loc.country, region: loc.region };
+        }),
+      setReduceEffects: (on) => set((s) => { s.reduceEffects = on; }),
+      startOver: () =>
+        set((s) => {
+          s.library = [];
+          s.scenarios = [];
+          s.activeScenarioId = null;
+          s.view = 'build';
+          s.analysis.slots = s.analysis.slots.map(() => null);
+          s.focusTarget = null;
+        }),
+      clearFocus: (id) => set((s) => { if (s.focusTarget?.id === id) s.focusTarget = null; }),
     })),
     {
       name: 'edi-app',
-      version: 1,
+      version: 2,
+      storage: createJSONStorage(() => debouncedStorage()),
+      migrate: (persisted, version) => {
+        const d = persisted as AppData & { scenarios: (Scenario & { taxRate?: number })[] };
+        if (version < 2) {
+          d.location ??= { ...DEFAULT_LOCATION };
+          d.reduceEffects ??= false;
+          for (const sc of d.scenarios ?? []) {
+            delete sc.taxRate;
+            sc.location ??= { linked: true, ...d.location };
+          }
+        }
+        return d;
+      },
       partialize: (s): AppData => ({
         library: s.library,
         scenarios: s.scenarios,
@@ -271,6 +388,8 @@ export const useStore = create<Store>()(
         view: s.view,
         period: s.period,
         analysis: s.analysis,
+        location: s.location,
+        reduceEffects: s.reduceEffects,
       }),
     },
   ),

@@ -1,0 +1,30 @@
+name: Quarterly tax source check
+
+on:
+  schedule:
+    # 06:00 UTC on Jan 1, Apr 1, Jul 1 and Oct 1
+    - cron: '0 6 1 1,4,7,10 *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Re-check official tax sources
+        run: node scripts/check-tax-sources.mjs
+      - name: Publish status (redeploys the site via Vercel)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/tax-status.json
+          if git diff --cached --quiet; then echo "No change"; exit 0; fi
+          ok=$(node -p "require('./public/tax-status.json').ok")
+          git commit -m "chore(tax): quarterly source check (ok=$ok)"
+          git push

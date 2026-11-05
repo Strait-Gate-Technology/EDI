@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { VALUE_ID, evaluateCard, fmtUnit, num, type FieldResult } from '../calc';
 import { uid, useStore } from '../store';
 import { FREQUENCIES, KIND_META, PER_YEAR, PERIODS, type CardDef } from '../types';
+import { scrollAndFocus } from './hooks';
 import { Icon, InlineName, Menu, cycle } from './ui';
 
 export interface CardViewProps {
@@ -26,7 +27,26 @@ export interface CardViewProps {
   onDropBefore?: (draggedId: string) => void;
 }
 
-export function CardView(p: CardViewProps) {
+/**
+ * Re-render only when data props change. Callbacks are recreated by parents on
+ * every render but only close over ids / the data compared here.
+ */
+function sameProps(a: CardViewProps, b: CardViewProps) {
+  for (const k of Object.keys(a) as (keyof CardViewProps)[]) {
+    const x = a[k], y = b[k];
+    if (typeof x === 'function' && typeof y === 'function') continue;
+    if (k === 'drag') {
+      if (a.drag?.id !== b.drag?.id || a.drag?.type !== b.drag?.type) return false;
+      continue;
+    }
+    if (x !== y) return false;
+  }
+  return Object.keys(a).length === Object.keys(b).length;
+}
+
+export const CardView = memo(CardViewImpl, sameProps);
+
+function CardViewImpl(p: CardViewProps) {
   const { def, onChange } = p;
   const readOnly = !onChange;
   const meta = KIND_META[def.kind];
@@ -37,6 +57,15 @@ export function CardView(p: CardViewProps) {
   const [formulaFocus, setFormulaFocus] = useState<string | null>(null);
   const [dropHover, setDropHover] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // Jump to a freshly created library card and select its name.
+  const focusNonce = useStore((s) => (p.context === 'library' && s.focusTarget?.id === def.id ? s.focusTarget.nonce : 0));
+  const clearFocus = useStore((s) => s.clearFocus);
+  useEffect(() => {
+    if (!focusNonce) return;
+    scrollAndFocus(cardRef.current, cardRef.current?.querySelector<HTMLInputElement>('.card-name'));
+    clearFocus(def.id);
+  }, [focusNonce, def.id, clearFocus]);
 
   const addField = (role: 'variable' | 'equation') => {
     if (!onChange) return;

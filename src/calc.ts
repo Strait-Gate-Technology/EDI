@@ -1,4 +1,6 @@
 import { CycleError, FormulaError, evaluateFormula, parsePlain, type NameRef } from './formula';
+import { computeTax, type TaxResult } from './tax/engine';
+import type { Location } from './tax/regions';
 import { KIND_META, PER_YEAR, type CardDef, type Scenario, type ScenarioCard } from './types';
 
 export const VALUE_ID = '__value';
@@ -103,6 +105,8 @@ export interface ScenarioTotals {
   nonTaxableIncome: number;
   grossIncome: number;
   tax: number;
+  taxDetail: TaxResult;
+  location: Location;
   netIncome: number;
   expenses: number;
   edi: number;
@@ -115,7 +119,7 @@ export interface ScenarioTotals {
 }
 
 /** All money / hour totals are annual. */
-export function scenarioTotals(s: Scenario, library: Map<string, CardDef>): ScenarioTotals {
+export function scenarioTotals(s: Scenario, library: Map<string, CardDef>, location: Location): ScenarioTotals {
   let taxable = 0, nonTaxable = 0, expenses = 0, hours = 0, errors = 0;
   const counts = { income: 0, expense: 0, hours: 0 };
   const items: ScenarioTotals['items'] = [];
@@ -131,7 +135,8 @@ export function scenarioTotals(s: Scenario, library: Map<string, CardDef>): Scen
     } else if (def.kind === 'expense') expenses += r.annual;
     else hours += r.annual;
   }
-  const tax = Math.max(0, taxable) * (s.taxRate / 100);
+  const taxDetail = computeTax(taxable, location.country, location.region);
+  const tax = taxDetail.total;
   const netIncome = taxable - tax + nonTaxable;
   const edi = netIncome - expenses;
   return {
@@ -139,6 +144,8 @@ export function scenarioTotals(s: Scenario, library: Map<string, CardDef>): Scen
     nonTaxableIncome: nonTaxable,
     grossIncome: taxable + nonTaxable,
     tax,
+    taxDetail,
+    location,
     netIncome,
     expenses,
     edi,
@@ -162,4 +169,5 @@ export function money(n: number, whole = false): string {
 }
 export const hoursFmt = (n: number) => (Number.isFinite(n) ? hourFmt.format(n) + ' h' : '—');
 export const num = (n: number) => (Number.isFinite(n) ? numFmt.format(n) : '—');
+export const pct = (n: number) => (Number.isFinite(n) ? (n * 100).toFixed(1) + '%' : '—');
 export const fmtUnit = (n: number, unit: '$' | 'h') => (unit === '$' ? money(n) : hoursFmt(n));

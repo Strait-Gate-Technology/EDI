@@ -1,3 +1,5 @@
+import type { Country } from './tax/regions';
+
 export type Kind = 'income' | 'expense' | 'hours';
 
 export type Frequency =
@@ -42,11 +44,17 @@ export interface ScenarioCard {
   def: CardDef;
 }
 
+export interface ScenarioLocation {
+  /** While linked, the scenario follows the app-wide location. */
+  linked: boolean;
+  country: Country;
+  region: string;
+}
+
 export interface Scenario {
   id: string;
   name: string;
-  /** Effective tax rate (%) applied to taxable incomes. */
-  taxRate: number;
+  location: ScenarioLocation;
   cards: ScenarioCard[];
 }
 
