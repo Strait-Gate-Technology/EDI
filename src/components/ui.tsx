@@ -24,7 +24,7 @@ export function cycle(seed: string, minSec = 150, maxSec = 480): CSSProperties {
 
 type IconName =
   | 'plus' | 'link' | 'unlink' | 'trash' | 'grip' | 'copy' | 'x' | 'chart' | 'back' | 'arrow'
-  | 'clock' | 'up' | 'down' | 'menu' | 'swap' | 'jump' | 'share' | 'qr';
+  | 'clock' | 'up' | 'down' | 'menu' | 'swap' | 'jump' | 'share' | 'qr' | 'warn' | 'variable';
 
 const PATHS: Record<IconName, ReactNode> = {
   plus: <path d="M12 5v14M5 12h14" />,
@@ -73,7 +73,24 @@ const PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   qr: <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2" />,
+  warn: (
+    <>
+      <path d="M12 3.5L2.5 20h19z" />
+      <path d="M12 10v4.5M12 17.2v.1" />
+    </>
+  ),
+  // "x" in a box: a named value
+  variable: <path d="M4 5h16v14H4zM9 9l6 6M15 9l-6 6" />,
 };
+
+/** Small red warning mark shown beside a value that is a problem (negative EDI, too many hours). */
+export function WarnMark({ title }: { title: string }) {
+  return (
+    <span className="warn-mark" title={title} aria-label={title} role="img">
+      <Icon name="warn" size={12} />
+    </span>
+  );
+}
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const filled = name === 'grip';

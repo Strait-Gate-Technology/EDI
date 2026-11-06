@@ -50,7 +50,7 @@ type Tok =
 
 const WORD = /[A-Za-z0-9_]/;
 
-function tokenize(src: string, names: NameRef[]): Tok[] {
+function tokenize(src: string, names: NameRef[], onUnknown?: (name: string) => void): Tok[] {
   const out: Tok[] = [];
   const lower = src.toLowerCase();
   let i = 0;
@@ -65,8 +65,11 @@ function tokenize(src: string, names: NameRef[]): Tok[] {
       if (j < 0) throw new FormulaError('Missing closing ]');
       const nm = src.slice(i + 1, j).trim().toLowerCase();
       const ref = names.find((n) => n.lower === nm);
-      if (!ref) throw new FormulaError(`Unknown variable "${src.slice(i + 1, j).trim()}"`);
-      out.push({ t: 'ref', id: ref.id, name: ref.name });
+      if (!ref) {
+        if (!onUnknown) throw new FormulaError(`Unknown variable "${src.slice(i + 1, j).trim()}"`);
+        onUnknown(src.slice(i + 1, j).trim());
+        out.push({ t: 'num', v: 0 });
+      } else out.push({ t: 'ref', id: ref.id, name: ref.name });
       i = j + 1;
       continue;
     }
@@ -113,7 +116,11 @@ function tokenize(src: string, names: NameRef[]): Tok[] {
       }
       // Grab the whole phrase for a friendlier message.
       const phrase = /^[A-Za-z_][A-Za-z0-9_ ]*/.exec(src.slice(i))![0].trim();
-      throw new FormulaError(`Unknown variable "${phrase}"`);
+      if (!onUnknown) throw new FormulaError(`Unknown variable "${phrase}"`);
+      onUnknown(phrase);
+      out.push({ t: 'num', v: 0 });
+      i += phrase.length;
+      continue;
     }
     throw new FormulaError(`Unexpected "${c}"`);
   }
@@ -218,6 +225,18 @@ export function evaluateFormula(
   if (p < toks.length) throw new FormulaError(`Unexpected ${describe(toks[p])}`);
   if (!Number.isFinite(v)) throw new FormulaError('Result is not a finite number');
   return v;
+}
+
+/**
+ * Names a formula uses that aren't in `names` (e.g. scenario variables a library card
+ * expects). Never throws; a malformed formula just yields what could be read.
+ */
+export function freeNames(src: string, names: NameRef[]): string[] {
+  const found = new Map<string, string>();
+  try {
+    tokenize(src, names, (n) => { if (n && !found.has(n.toLowerCase())) found.set(n.toLowerCase(), n); });
+  } catch { /* syntax errors are reported by evaluateFormula */ }
+  return [...found.values()];
 }
 
 /** Parse a direct-entry value: "1,200", "$45.50", "12%" … Empty → 0. */

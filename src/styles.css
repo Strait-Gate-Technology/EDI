@@ -1019,3 +1019,66 @@ body.is-mobile .quick-add:disabled { opacity: 0.35; }
 }
 .share-qr svg { width: 100%; height: auto; }
 .dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+
+/* ---------- Scenario variables ---------- */
+:root { --vars: #b49cff; }
+.zone--vars { --type: var(--vars); }
+.kind-dot--vars { background: var(--vars); box-shadow: 0 0 10px var(--vars); border-radius: 3px; }
+.zone-vars { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 10px; align-items: start; }
+.zone-vars > .zone-empty, .zone-vars > .name-chips { grid-column: 1 / -1; }
+.var-row {
+  padding: 8px 10px 6px;
+  border-radius: 12px;
+  background: hsl(0 0% 100% / 0.04);
+  border: 1px solid color-mix(in srgb, var(--vars) 28%, transparent);
+  min-width: 0;
+}
+.var-users { font-size: 10.5px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.var-users.is-unused { font-style: italic; opacity: 0.7; }
+.add-var { justify-self: start; align-self: center; }
+.needs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 2px 0 8px; font-size: 11px; color: var(--muted); }
+.needs-label { display: inline-flex; align-items: center; gap: 4px; }
+.var-chip {
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 11px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--vars) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vars) 45%, transparent);
+}
+button.var-chip--add {
+  display: inline-flex; align-items: center; gap: 3px;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--neg) 18%, transparent);
+  border-color: color-mix(in srgb, var(--neg) 50%, transparent);
+  font: inherit; font-size: 11px; color: var(--text);
+}
+button.var-chip--add:hover { background: color-mix(in srgb, var(--neg) 30%, transparent); }
+.field-result.is-pending { color: var(--vars); font-style: italic; }
+
+/* ---------- Warnings: negative EDI, impossible hours ---------- */
+.warn-mark {
+  display: inline-flex;
+  vertical-align: 0.1em;
+  margin-left: 0.3em;
+  color: var(--neg);
+  cursor: help;
+}
+.warn-mark svg { width: 0.62em; height: 0.62em; min-width: 11px; min-height: 11px; }
+
+/* ---------- Analysis hero: EDI / hour + Total EDI ---------- */
+.hero-pair { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 4px 14px; }
+.hero-fig { display: flex; flex-direction: column; min-width: 0; }
+.hero-fig--total { align-items: flex-end; text-align: right; }
+.hero-total { font-size: 22px; font-weight: 750; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.hero-total.neg { color: var(--neg); }
+body.is-mobile .hero-total { font-size: 20px; }
+.var-row .field, body.is-mobile .var-row .field { grid-template-columns: minmax(0, 1.2fr) minmax(90px, 1fr); }
+.var-row .field-label-wrap .inline-name { color: var(--text); font-weight: 600; }
+/* Keep EDI / hour and Total EDI side by side: both scale with the column's width. */
+.col-hero { container-type: inline-size; }
+.hero-pair { flex-wrap: nowrap; }
+.hero-pair .hero-value { font-size: clamp(20px, 16cqi, 38px); white-space: nowrap; }
+.hero-pair .hero-total { font-size: clamp(14px, 9.5cqi, 24px); white-space: nowrap; }
+.hero-fig--total .big-label { white-space: nowrap; }
+body.is-mobile .hero-pair .hero-value { font-size: clamp(22px, 14cqi, 32px); }

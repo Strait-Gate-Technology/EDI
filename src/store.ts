@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { cardFreeNames } from './calc';
 import type { SharedProject } from './share';
 import { DEFAULT_LOCATION, sameLocation, type Location } from './tax/regions';
 import type { CardDef, Field, Frequency, Kind, Period, Scenario } from './types';
@@ -43,8 +44,17 @@ interface Actions {
   deleteScenario: (id: string) => void;
   setActive: (id: string | null) => void;
 
-  /** Adds a linked copy; returns false if a linked copy of that parent is already there. */
-  addCardToScenario: (scenarioId: string, libraryId: string) => boolean;
+  /**
+   * Adds a linked copy. Returns the names of scenario variables it had to create
+   * (the card uses them but the scenario lacked them), or null if a linked copy of
+   * that parent is already there.
+   */
+  addCardToScenario: (scenarioId: string, libraryId: string) => string[] | null;
+  addScenarioVariable: (scenarioId: string) => void;
+  updateScenarioVariable: (scenarioId: string, varId: string, fn: (f: Field) => void) => void;
+  removeScenarioVariable: (scenarioId: string, varId: string) => void;
+  /** Create empty variables for these names (skipping ones that exist). */
+  addMissingVariables: (scenarioId: string, names: string[]) => void;
   /** Show a library card (scroll to it, select its name) — e.g. from a linked copy. */
   jumpToLibraryCard: (id: string) => void;
   updateScenarioCard: (scenarioId: string, cardId: string, fn: (d: CardDef) => void) => void;
@@ -87,6 +97,20 @@ export const MIN_COLUMNS = 3;
 export const hasLinkedCopy = (sc: Scenario, parentId: string) =>
   sc.cards.some((c) => c.linked && c.parentId === parentId);
 
+/** Append empty variables for names the scenario doesn't define yet; returns the new ones. */
+function ensureVariables(sc: Scenario, names: string[]): Field[] {
+  const have = new Set(sc.variables.map((v) => v.name.trim().toLowerCase()));
+  const added: Field[] = [];
+  for (const n of names) {
+    if (have.has(n.toLowerCase())) continue;
+    have.add(n.toLowerCase());
+    const f: Field = { id: uid(), name: n, expr: '', role: 'variable' };
+    sc.variables.push(f);
+    added.push(f);
+  }
+  return added;
+}
+
 /** Older saves / exports stored fixed columns with nulls for empty spots. */
 function normaliseAnalysis(a: unknown): AppData['analysis'] {
   const slots = (a as { slots?: unknown[] } | undefined)?.slots ?? [];
@@ -109,6 +133,7 @@ function reId(p: SharedProject): SharedProject {
       ...clone(sc),
       id: id(sc.id),
       cards: sc.cards.map((c) => ({ ...c, id: uid(), parentId: c.parentId ? id(c.parentId) : null, def: card(c.def) })),
+      variables: (sc.variables ?? []).map((f) => ({ ...f, id: uid() })),
     })),
     stage: p.stage.map(id),
   };
@@ -144,8 +169,9 @@ export function sampleData(): AppData {
   });
   const commuter = card('income', 'Commuter benefit', '100', 'monthly', { taxable: false });
   const insurance = card('expense', 'Car insurance', '145', 'monthly');
+  // Distance comes from each scenario's variables, so one Gas card serves every commute.
   const gas = card('expense', 'Gas', '=Fuel Price * Distance / 100 * Efficiency', 'monthly', {
-    fields: [field('Fuel Price', '1.62'), field('Distance', '1400'), field('Efficiency', '8.5')],
+    fields: [field('Fuel Price', '1.62'), field('Efficiency', '8.5')],
   });
   const parking = card('expense', 'Downtown parking', '180', 'monthly');
   const transit = card('expense', 'Transit pass', '156', 'monthly');
@@ -154,22 +180,31 @@ export function sampleData(): AppData {
   });
   const work = card('hours', 'Office work week', '40', 'weekly');
   const contractHours = card('hours', 'Contract hours', '32', 'weekly');
-  const drive = card('hours', 'Driving commute', '=Minutes each way * 2 * Days / 60', 'weekly', {
-    fields: [field('Minutes each way', '35'), field('Days', '5')],
-  });
-  const ride = card('hours', 'Transit commute', '=Minutes each way * 2 * Days / 60', 'weekly', {
-    fields: [field('Minutes each way', '55'), field('Days', '5')],
+  // "Minutes each way" is a scenario variable: driving and transit differ.
+  const commute = card('hours', 'Commute', '=Minutes each way * 2 * Days / 60', 'weekly', {
+    fields: [field('Days', '5')],
   });
   const meal = card('hours', 'Lunch prep', '2.5', 'weekly');
 
-  const library = [salary, contract, commuter, insurance, gas, parking, transit, office, work, contractHours, drive, ride, meal];
+  const library = [salary, contract, commuter, insurance, gas, parking, transit, office, work, contractHours, commute, meal];
   const place = (d: CardDef) => ({ id: uid(), parentId: d.id, linked: true, def: clone(d) });
 
   const loc = () => ({ linked: true, ...DEFAULT_LOCATION });
   const scenarios: Scenario[] = [
-    { id: uid(), name: 'Office · Driving', location: loc(), cards: [salary, insurance, gas, parking, work, drive, meal].map(place) },
-    { id: uid(), name: 'Office · Transit', location: loc(), cards: [salary, commuter, transit, work, ride, meal].map(place) },
-    { id: uid(), name: 'Remote contract', location: { linked: false, country: 'CA', region: 'ON' }, cards: [contract, office, contractHours].map(place) },
+    {
+      id: uid(), name: 'Office · Driving', location: loc(),
+      cards: [salary, insurance, gas, parking, work, commute, meal].map(place),
+      variables: [field('Distance', '1400'), field('Minutes each way', '35')],
+    },
+    {
+      id: uid(), name: 'Office · Transit', location: loc(),
+      cards: [salary, commuter, transit, work, commute, meal].map(place),
+      variables: [field('Minutes each way', '55')],
+    },
+    {
+      id: uid(), name: 'Remote contract', location: { linked: false, country: 'CA', region: 'ON' },
+      cards: [contract, office, contractHours].map(place), variables: [],
+    },
   ];
   return {
     library,
@@ -286,7 +321,7 @@ export const useStore = create<Store>()(
       addScenario: () => {
         const id = uid();
         set((s) => {
-          s.scenarios.push({ id, name: nextName(s.scenarios.map((x) => x.name), 'Scenario'), location: { linked: true, ...s.location }, cards: [] });
+          s.scenarios.push({ id, name: nextName(s.scenarios.map((x) => x.name), 'Scenario'), location: { linked: true, ...s.location }, cards: [], variables: [] });
           s.activeScenarioId = id;
           s.view = 'build';
           s.focusTarget = focus(id);
@@ -308,6 +343,7 @@ export const useStore = create<Store>()(
           const base = baseName(copy.name);
           copy.name = uniqueCopyName(base, s.scenarios.map((x) => x.name));
           copy.cards.forEach((c) => (c.id = uid()));
+          copy.variables.forEach((f) => (f.id = uid()));
           // Place it after the last scenario of the same family: A, A (2), A (3)…
           let at = i;
           s.scenarios.forEach((x, j) => { if (baseName(x.name) === base) at = Math.max(at, j); });
@@ -328,15 +364,50 @@ export const useStore = create<Store>()(
 
       addCardToScenario: (scenarioId, libraryId) => {
         const cur = get().scenarios.find((x) => x.id === scenarioId);
-        if (!cur || hasLinkedCopy(cur, libraryId)) return false;
+        const parent = get().library.find((c) => c.id === libraryId);
+        if (!cur || !parent || hasLinkedCopy(cur, libraryId)) return null;
+        const needs = cardFreeNames(parent);
+        let added: string[] = [];
         set((s) => {
           const sc = s.scenarios.find((x) => x.id === scenarioId);
           const d = s.library.find((c) => c.id === libraryId);
           if (!sc || !d) return;
           sc.cards.push({ id: uid(), parentId: d.id, linked: true, def: clone(d) });
+          // Variables the card expects but this scenario lacks are created empty.
+          const fresh = ensureVariables(sc, needs);
+          added = fresh.map((f) => f.name);
+          if (fresh.length) s.focusTarget = focus(fresh[0].id);
         });
-        return true;
+        return added;
       },
+      addScenarioVariable: (scenarioId) =>
+        set((s) => {
+          const sc = s.scenarios.find((x) => x.id === scenarioId);
+          if (!sc) return;
+          const names = new Set(sc.variables.map((v) => v.name.trim().toLowerCase()));
+          let n = 1;
+          while (names.has(`variable ${n}`)) n++;
+          const f: Field = { id: uid(), name: `Variable ${n}`, expr: '', role: 'variable' };
+          sc.variables.push(f);
+          s.focusTarget = focus(f.id + ':name');
+        }),
+      updateScenarioVariable: (scenarioId, varId, fn) =>
+        set((s) => {
+          const f = s.scenarios.find((x) => x.id === scenarioId)?.variables.find((v) => v.id === varId);
+          if (f) fn(f);
+        }),
+      removeScenarioVariable: (scenarioId, varId) =>
+        set((s) => {
+          const sc = s.scenarios.find((x) => x.id === scenarioId);
+          if (sc) sc.variables = sc.variables.filter((v) => v.id !== varId);
+        }),
+      addMissingVariables: (scenarioId, names) =>
+        set((s) => {
+          const sc = s.scenarios.find((x) => x.id === scenarioId);
+          if (!sc) return;
+          const fresh = ensureVariables(sc, names);
+          if (fresh.length) s.focusTarget = focus(fresh[0].id);
+        }),
       jumpToLibraryCard: (id) =>
         set((s) => {
           if (!s.library.some((c) => c.id === id)) return;
@@ -403,7 +474,13 @@ export const useStore = create<Store>()(
           [slots[a], slots[b]] = [slots[b], slots[a]];
         }),
 
-      replaceAll: (data) => set(() => ({ ...emptyData(), ...data, analysis: normaliseAnalysis(data.analysis) })),
+      replaceAll: (data) =>
+        set(() => ({
+          ...emptyData(),
+          ...data,
+          scenarios: (data.scenarios ?? []).map((sc) => ({ ...sc, variables: sc.variables ?? [] })),
+          analysis: normaliseAnalysis(data.analysis),
+        })),
 
       setLocation: (loc) => set((s) => { s.location = { ...loc }; }),
       setScenarioLocation: (id, loc) =>
@@ -452,7 +529,7 @@ export const useStore = create<Store>()(
     })),
     {
       name: 'edi-app',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => debouncedStorage()),
       migrate: (persisted, version) => {
         const d = persisted as AppData & { scenarios: (Scenario & { taxRate?: number })[] };
@@ -465,6 +542,7 @@ export const useStore = create<Store>()(
           }
         }
         if (version < 3) d.analysis = normaliseAnalysis(d.analysis);
+        if (version < 4) for (const sc of d.scenarios ?? []) sc.variables ??= [];
         return d;
       },
       partialize: (s): AppData => ({

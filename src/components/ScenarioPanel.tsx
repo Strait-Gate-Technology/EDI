@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { effectiveDef, hoursFmt, money, pct, type ScenarioTotals } from '../calc';
+import { cardFreeNames, effectiveDef, hoursFmt, money, pct, type ScenarioTotals } from '../calc';
 import { scenarioLocation, useStore } from '../store';
 import { TAX_ASSUMPTIONS, TAX_YEAR, hasIncomeTax } from '../tax/engine';
-import { countryOf, regionName } from '../tax/regions';
+import { countryOf, flagId, regionName } from '../tax/regions';
 import { KINDS, KIND_META, PERIODS, type CardDef, type Kind, type Scenario } from '../types';
-import { askDeleteScenario } from './actions';
-import { CardView } from './CardView';
-import { LocationPicker, LocationSuffix } from './Flag';
+import { addCardWithToast, askDeleteScenario } from './actions';
+import { CardView, FieldRow } from './CardView';
+import { EdiAmount, EdiPerHour, OVER_HOURS_MSG } from './Edi';
+import { Flag, LocationPicker, LocationSuffix } from './Flag';
 import { DRAG_PARENT_PREFIX, scrollAndFocus, useAllTotals, useLibraryMap } from './hooks';
-import { toast } from './Dialog';
 import { DRAG_LIB } from './LibraryPanel';
-import { Icon, cycle } from './ui';
+import { Icon, WarnMark, cycle } from './ui';
 
 export const DRAG_MOVE = (k: Kind) => `application/x-edi-move-${k}`;
 export { useLibraryMap };
@@ -96,6 +96,7 @@ function ScenarioEditor({ scenario }: { scenario: Scenario }) {
         {KINDS.map((k) => (
           <Zone key={k} kind={k} scenario={scenario} lib={lib} totals={totals} />
         ))}
+        <VariablesZone scenario={scenario} lib={lib} totals={totals} />
       </div>
 
       <TotalsFooter totals={totals} seed={scenario.id} />
@@ -142,9 +143,11 @@ function TaxCard({ totals }: { totals: ScenarioTotals }) {
       </div>
       <dl className="tax-rows">
         <div><dt>Taxable income</dt><dd>{money(per(t.taxable))}</dd></div>
-        <div><dt>{fedLabel}</dt><dd className="neg">{money(-per(t.federal))}</dd></div>
+        <div><dt className="tax-where">{fedLabel} <Flag id={flagId(loc.country)} title={countryOf(loc.country).name} /></dt><dd className="neg">{money(-per(t.federal))}</dd></div>
         <div>
-          <dt>{regLabel} · {regionName(loc.country, loc.region)}</dt>
+          <dt className="tax-where">
+            {regLabel} · {regionName(loc.country, loc.region)} <Flag id={flagId(loc.country, loc.region)} title={regionName(loc.country, loc.region)} />
+          </dt>
           <dd className="neg">{hasIncomeTax(loc.country, loc.region) ? money(-per(t.regional)) : 'none'}</dd>
         </div>
         {t.lines.map((l) => (
@@ -155,14 +158,14 @@ function TaxCard({ totals }: { totals: ScenarioTotals }) {
       <div className="tax-rates">
         <span>Effective <b>{pct(t.effectiveRate)}</b></span>
         <span>Marginal <b>{pct(t.marginalRate)}</b></span>
-        <span className="muted">{countryOf(loc.country).short}</span>
+        <span className="muted tax-where"><Flag id={flagId(loc.country)} title={countryOf(loc.country).name} /> {countryOf(loc.country).short}</span>
       </div>
     </div>
   );
 }
 
 function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario; lib: Map<string, CardDef>; totals: ScenarioTotals }) {
-  const addCard = useStore((s) => s.addCardToScenario);
+  const addMissing = useStore((s) => s.addMissingVariables);
   const updateCard = useStore((s) => s.updateScenarioCard);
   const unlink = useStore((s) => s.unlinkScenarioCard);
   const remove = useStore((s) => s.removeScenarioCard);
@@ -207,7 +210,7 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
         const moveId = e.dataTransfer.getData(DRAG_MOVE(kind));
         if (libId) {
           e.preventDefault();
-          if (!addCard(scenario.id, libId)) toast(`“${lib.get(libId)?.name ?? 'That card'}” is already linked in this scenario`);
+          addCardWithToast(scenario.id, libId);
         } else if (moveId) {
           e.preventDefault();
           move(scenario.id, moveId, null);
@@ -249,10 +252,116 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
               dropAccept={DRAG_MOVE(kind)}
               onDropBefore={(dragged) => move(scenario.id, dragged, c.id)}
               onJumpToParent={linked && c.parentId ? () => jump(c.parentId!) : undefined}
+              scope={totals.scope}
+              onAddMissing={(names) => addMissing(scenario.id, names)}
             />
           );
         })}
         {kind === 'income' && <TaxCard totals={totals} />}
+      </div>
+    </section>
+  );
+}
+
+/** Scenario-specific values (e.g. Distance) that any card in this scenario can use by name. */
+function VariablesZone({ scenario, lib, totals }: { scenario: Scenario; lib: Map<string, CardDef>; totals: ScenarioTotals }) {
+  const addVar = useStore((s) => s.addScenarioVariable);
+  const updateVar = useStore((s) => s.updateScenarioVariable);
+  const removeVar = useStore((s) => s.removeScenarioVariable);
+  const clearFocus = useStore((s) => s.clearFocus);
+  const focusTarget = useStore((s) => s.focusTarget);
+  const [formulaFocus, setFormulaFocus] = useState<string | null>(null);
+  const ref = useRef<HTMLElement>(null);
+
+  // Which cards use each variable name.
+  const usedBy = new Map<string, string[]>();
+  for (const c of scenario.cards) {
+    const def = effectiveDef(c, lib);
+    for (const n of cardFreeNames(def)) {
+      const k = n.toLowerCase();
+      usedBy.set(k, [...(usedBy.get(k) ?? []), def.name]);
+    }
+  }
+
+  // Focus a variable that was just created (auto-added by a card, or via + Variable).
+  const target = focusTarget && scenario.variables.find((v) => focusTarget.id === v.id || focusTarget.id === v.id + ':name');
+  const focus = target ? (focusTarget!.id.endsWith(':name') ? target.id + ':name' : target.id + ':expr') : null;
+  useEffect(() => {
+    if (!target || !focusTarget) return;
+    ref.current?.querySelector(`[data-var="${target.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const id = focusTarget.id;
+    const t = setTimeout(() => clearFocus(id), 50);
+    return () => clearTimeout(t);
+  }, [target, focusTarget, clearFocus]);
+
+  const insertName = (name: string) => {
+    const el = document.activeElement as HTMLInputElement | null;
+    const vid = el?.dataset.field;
+    if (!el || !vid) return;
+    const token = /^[A-Za-z_][A-Za-z0-9_ ]*$/.test(name) ? name : `[${name}]`;
+    const a = el.selectionStart ?? el.value.length;
+    const before = el.value.slice(0, a);
+    const pad = before && !/[\s(=+\-*/^,]$/.test(before) ? ' ' : '';
+    updateVar(scenario.id, vid, (f) => { f.expr = before + pad + token + el.value.slice(el.selectionEnd ?? a); });
+  };
+
+  return (
+    <section ref={ref} className="zone zone--vars cycle" style={cycle(scenario.id + ':zone:vars', 180, 460)} aria-label="Scenario variables">
+      <div className="zone-head">
+        <h3>
+          <span className="kind-dot kind-dot--vars" />
+          Variables
+        </h3>
+        <span className="zone-hint" title="Cards in this scenario can use these names in their formulas, e.g. =Fuel Price * Distance / 100">
+          Used by name in this scenario’s cards
+        </span>
+      </div>
+      <div className="zone-vars">
+        {scenario.variables.length === 0 && (
+          <div className="zone-empty">
+            No variables yet. Add one, or add a card whose formula uses a name it doesn’t define.
+          </div>
+        )}
+        {scenario.variables.map((v) => {
+          const users = usedBy.get(v.name.trim().toLowerCase()) ?? [];
+          return (
+            <div key={v.id} className="var-row" data-var={v.id}>
+              <FieldRow
+                name={v.name}
+                expr={v.expr}
+                role="variable"
+                fieldId={v.id}
+                result={totals.scope.results.get(v.id)}
+                readOnly={false}
+                unit={null}
+                focus={focus}
+                placeholder="value"
+                onFocusFormula={setFormulaFocus}
+                onName={(n) => updateVar(scenario.id, v.id, (f) => { f.name = n; })}
+                onExpr={(e) => updateVar(scenario.id, v.id, (f) => { f.expr = e; })}
+                onRemove={() => removeVar(scenario.id, v.id)}
+              />
+              <div className={'var-users' + (users.length ? '' : ' is-unused')}>
+                {users.length ? `Used by ${[...new Set(users)].join(', ')}` : 'Unused'}
+              </div>
+            </div>
+          );
+        })}
+        {formulaFocus && scenario.variables.length > 1 && (
+          <div className="name-chips" onMouseDown={(e) => e.preventDefault()}>
+            <span>Insert:</span>
+            {scenario.variables
+              .filter((v) => v.id !== formulaFocus && v.name.trim())
+              .map((v) => (
+                <button type="button" key={v.id} className="chip" onClick={() => insertName(v.name.trim())}>
+                  {v.name.trim()}
+                </button>
+              ))}
+          </div>
+        )}
+        <button type="button" className="glass-btn add-var" onClick={() => addVar(scenario.id)}>
+          <Icon name="plus" size={14} /> Variable
+        </button>
       </div>
     </section>
   );
@@ -271,21 +380,32 @@ export function TotalsFooter({ totals, seed }: { totals: ScenarioTotals; seed: s
         <div><dt>Income tax ({pct(totals.taxDetail.effectiveRate)})</dt><dd className="neg">{money(-per(totals.tax))}</dd></div>
         <div><dt>Net income</dt><dd>{money(per(totals.netIncome))}</dd></div>
         <div><dt>Expenses</dt><dd className="neg">{money(-per(totals.expenses))}</dd></div>
-        <div><dt>Hours</dt><dd>{hoursFmt(per(totals.hours))}</dd></div>
+        <div>
+          <dt>Hours</dt>
+          <dd className={totals.overHours ? 'neg' : ''}>
+            {hoursFmt(per(totals.hours))}
+            {totals.overHours && <WarnMark title={OVER_HOURS_MSG} />}
+          </dd>
+        </div>
       </dl>
       <div className="headline">
         <div className="big">
           <span className="big-label">EDI <small>/{pm.short}</small></span>
-          <span className={'big-value' + (totals.edi < 0 ? ' neg' : '')}>{money(per(totals.edi))}</span>
+          <span className={'big-value' + (totals.edi < 0 ? ' neg' : '')}><EdiAmount value={per(totals.edi)} /></span>
         </div>
         <div className="big big--accent">
           <span className="big-label">EDI / hour</span>
           <span className={'big-value' + ((totals.ediPerHour ?? 0) < 0 ? ' neg' : '')}>
-            {totals.ediPerHour === null ? '—' : money(totals.ediPerHour)}
+            <EdiPerHour t={totals} />
           </span>
         </div>
       </div>
-      {totals.errors > 0 && <p className="totals-warn">{totals.errors} card{totals.errors > 1 ? 's have' : ' has'} formula errors (counted as 0).</p>}
+      {totals.errors > 0 && <p className="totals-warn">{totals.errors} card{totals.errors > 1 ? 's have' : ' has'} errors (counted as 0).</p>}
+      {totals.overHours && (
+        <p className="totals-warn">
+          Hours average {hoursFmt(totals.weeklyHours)}/week, more than the 168 h a week holds. EDI / hour isn’t computed until they fit.
+        </p>
+      )}
       {totals.hours <= 0 && totals.counts.income + totals.counts.expense > 0 && (
         <p className="totals-warn subtle">Add Hours cards to get an EDI / hour figure.</p>
       )}

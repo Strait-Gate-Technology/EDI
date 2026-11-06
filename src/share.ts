@@ -55,6 +55,7 @@ function restore(p: SharedProject): SharedProject {
     ...p,
     scenarios: p.scenarios.map((s) => ({
       ...s,
+      variables: Array.isArray(s.variables) ? s.variables : [], // links made before scenario variables
       cards: s.cards.map((c) => {
         if (c.def) return c;
         const parent = c.parentId ? lib.get(c.parentId) : undefined;

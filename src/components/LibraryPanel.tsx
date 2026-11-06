@@ -1,9 +1,8 @@
 import { useMemo } from 'react';
 import { hasLinkedCopy, useStore } from '../store';
 import { KINDS, KIND_META, type Kind } from '../types';
-import { askDeleteLibraryCard } from './actions';
+import { addCardWithToast, askDeleteLibraryCard } from './actions';
 import { CardView } from './CardView';
-import { toast } from './Dialog';
 import { Icon, cycle } from './ui';
 
 export const DRAG_LIB = (k: Kind) => `application/x-edi-lib-${k}`;
@@ -15,7 +14,6 @@ export function LibraryPanel() {
   const add = useStore((s) => s.addLibraryCard);
   const update = useStore((s) => s.updateLibraryCard);
   const dup = useStore((s) => s.duplicateLibraryCard);
-  const addToScenario = useStore((s) => s.addCardToScenario);
 
   const active = scenarios.find((s) => s.id === activeId);
 
@@ -66,7 +64,7 @@ export function LibraryPanel() {
                     onChange={(fn) => update(c.id, fn)}
                     onDuplicate={() => dup(c.id)}
                     onRemove={() => askDeleteLibraryCard(c.id, usage.get(c.id) ?? 0)}
-                    onQuickAdd={active ? () => { if (addToScenario(active.id, c.id)) toast(`Added “${c.name}” to ${active.name}`); } : undefined}
+                    onQuickAdd={active ? () => addCardWithToast(active.id, c.id) : undefined}
                     quickAddDisabled={!!active && hasLinkedCopy(active, c.id)}
                     quickAddLabel={active ? (hasLinkedCopy(active, c.id) ? `Already linked in “${active.name}”` : `Add to “${active.name}”`) : undefined}
                     drag={{ type: DRAG_LIB(kind), id: c.id }}

@@ -1,8 +1,9 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { fmtUnit, hoursFmt, money, pct, type ScenarioTotals } from '../calc';
 import { MIN_COLUMNS, useStore } from '../store';
-import { regionName } from '../tax/regions';
+import { countryOf, flagId, regionName } from '../tax/regions';
 import { KINDS, KIND_META, PERIODS, type Scenario } from '../types';
+import { EdiAmount, EdiPerHour } from './Edi';
 import { Flag, ScenarioTitle } from './Flag';
 import { DRAG_SCENARIO, DRAG_SLOT, useAllTotals } from './hooks';
 import { Icon, cycle } from './ui';
@@ -139,7 +140,7 @@ export function Analysis({ mobile = false }: { mobile?: boolean }) {
                   title={mobile ? 'Tap to add to the stage' : 'Click to add as a column, or drag onto the stage'}
                 >
                   <span className="tab-name"><ScenarioTitle scenario={s} /></span>
-                  <span className="tab-metric">{t.ediPerHour == null ? '—' : money(t.ediPerHour)}<small>/h</small></span>
+                  <span className={'tab-metric' + ((t.ediPerHour ?? 0) < 0 ? ' neg' : '')}><EdiPerHour t={t} /><small>/h</small></span>
                 </button>
               );
             })}
@@ -245,8 +246,16 @@ const Column = memo(function Column(props: {
       </header>
 
       <div className="col-hero">
-        <span className="big-label">EDI / hour</span>
-        <span className={'hero-value' + ((t.ediPerHour ?? 0) < 0 ? ' neg' : '')}>{t.ediPerHour == null ? '—' : money(t.ediPerHour)}</span>
+        <div className="hero-pair">
+          <div className="hero-fig">
+            <span className="big-label">EDI / hour</span>
+            <span className={'hero-value' + ((t.ediPerHour ?? 0) < 0 || t.overHours ? ' neg' : '')}><EdiPerHour t={t} /></span>
+          </div>
+          <div className="hero-fig hero-fig--total">
+            <span className="big-label">Total EDI <small>/{pm.short}</small></span>
+            <span className={'hero-total' + (t.edi < 0 ? ' neg' : '')}><EdiAmount value={per(t.edi)} whole /></span>
+          </div>
+        </div>
         <Bar value={t.ediPerHour ?? 0} max={props.maxes.eph} />
       </div>
 
@@ -265,7 +274,8 @@ const Column = memo(function Column(props: {
         })}
         <div className="metric-row small muted">
           <span className="tax-where">
-            <Flag id={`${loc.country}-${loc.region}`} /> Tax · {regionName(loc.country, loc.region)} · {pct(t.taxDetail.effectiveRate)} eff.
+            <Flag id={flagId(loc.country)} title={countryOf(loc.country).name} />
+            <Flag id={flagId(loc.country, loc.region)} title={regionName(loc.country, loc.region)} /> Tax · {regionName(loc.country, loc.region)} · {pct(t.taxDetail.effectiveRate)} eff.
           </span>
           <span>{money(-per(t.tax), true)}</span>
         </div>

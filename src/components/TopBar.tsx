@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { money } from '../calc';
 import { emptyData, useStore, type AppData } from '../store';
 import { PERIODS } from '../types';
 import { askClearAll, askDeleteScenario, askLoadSample, askStartOver } from './actions';
 import { alertDialog } from './Dialog';
+import { EdiPerHour } from './Edi';
 import { LocationPicker, ScenarioTitle } from './Flag';
 import { openShare } from './Share';
 import { DRAG_SCENARIO, DRAG_SLOT, scrollAndFocus, useAllTotals } from './hooks';
@@ -118,7 +118,7 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
         }}
       >
         {scenarios.map((s) => {
-          const v = totals.get(s.id)?.ediPerHour;
+          const t = totals.get(s.id);
           return (
             <button
               key={s.id}
@@ -166,7 +166,7 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
               title={mobile ? `${s.name} — long-press for options` : view === 'analysis' ? `Drag “${s.name}” onto a column, or click to edit. Right-click for options.` : `Edit ${s.name}. Right-click for options; Delete key deletes.`}
             >
               <span className="tab-name"><ScenarioTitle scenario={s} compact /></span>
-              <span className="tab-metric">{v == null ? '—' : money(v)}<small>/h</small></span>
+              <span className={'tab-metric' + ((t?.ediPerHour ?? 0) < 0 ? ' neg' : '')}>{t ? <EdiPerHour t={t} /> : '—'}<small>/h</small></span>
             </button>
           );
         })}

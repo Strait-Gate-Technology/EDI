@@ -8,7 +8,10 @@ import {
 import type { Scenario } from '../types';
 import { Icon } from './ui';
 
-/** Tiny pre-rasterised flag (public/flags/*.webp, ~1 KB each). */
+/**
+ * Tiny pre-rasterised flag (public/flags/*.webp, ~1 KB each). Loaded eagerly: lazy
+ * images inside scrolling panels (Analysis stage, editor) were sometimes never fetched.
+ */
 export const Flag = memo(function Flag({ id, title, size = 'sm' }: { id: string; title?: string; size?: 'sm' | 'md' }) {
   return (
     <img
@@ -18,7 +21,6 @@ export const Flag = memo(function Flag({ id, title, size = 'sm' }: { id: string;
       title={title}
       width={size === 'sm' ? 18 : 24}
       height={size === 'sm' ? 12 : 16}
-      loading="lazy"
       decoding="async"
       draggable={false}
     />

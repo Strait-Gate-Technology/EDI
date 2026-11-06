@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { VALUE_ID, evaluateCard, fmtUnit, num, type FieldResult } from '../calc';
+import { VALUE_ID, evaluateCard, fmtUnit, num, type FieldResult, type Scope } from '../calc';
 import { uid, useStore } from '../store';
 import { FREQUENCIES, KIND_META, PER_YEAR, PERIODS, type CardDef } from '../types';
 import { DRAG_PARENT, scrollAndFocus } from './hooks';
@@ -24,6 +24,10 @@ export interface CardViewProps {
   quickAddDisabled?: boolean;
   /** Scenario cards that are still linked: jump to the parent card in the library. */
   onJumpToParent?: () => void;
+  /** Scenario cards: the scenario's evaluated variables. */
+  scope?: Scope;
+  /** Scenario cards: create the scenario variables this card needs but lacks. */
+  onAddMissing?: (names: string[]) => void;
   /** Drag payload set when the grip is dragged. */
   drag?: { type: string; id: string };
   /** Drop handler for reordering (scenario cards). */
@@ -54,7 +58,7 @@ function CardViewImpl(p: CardViewProps) {
   const { def, onChange } = p;
   const readOnly = !onChange;
   const meta = KIND_META[def.kind];
-  const result = useMemo(() => evaluateCard(def), [def]);
+  const result = useMemo(() => evaluateCard(def, p.scope), [def, p.scope]);
   const period = useStore((s) => s.period);
   const periodMeta = PERIODS.find((x) => x.id === period)!;
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -139,7 +143,13 @@ function CardViewImpl(p: CardViewProps) {
 
   const accepts = (e: DragEvent) => !!p.dropAccept && e.dataTransfer.types.includes(p.dropAccept);
 
-  const annualPerPeriod = result.value.error ? NaN : result.annual / periodMeta.perYear;
+  const annualPerPeriod = result.value.error || result.value.pending ? NaN : result.annual / periodMeta.perYear;
+  // Names offered as insert chips: own fields, plus the scenario's variables.
+  const chipNames = [
+    ...def.fields.filter((f) => f.name.trim() && f.id !== formulaFocus).map((f) => f.name.trim()),
+    ...(p.scope ? [...p.scope.byName.values()].map((v) => v.name) : []),
+  ].filter((n, i, a) => a.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i);
+  const fromScope = result.needs.filter((n) => !result.missing.includes(n));
   const linkedRO = p.context === 'scenario' && p.linked;
 
   return (
@@ -149,6 +159,7 @@ function CardViewImpl(p: CardViewProps) {
         `card card--${def.kind} cycle` +
         (readOnly ? ' is-readonly' : '') +
         (result.hasError ? ' has-error' : '') +
+        (result.value.pending ? ' is-pending' : '') +
         (dropHover ? ' drop-before' : '')
       }
       style={cycle(p.seed, 140, 420)}
@@ -245,6 +256,28 @@ function CardViewImpl(p: CardViewProps) {
         </div>
       </div>
 
+      {result.needs.length > 0 && (
+        <div className="needs">
+          {p.context === 'library' ? (
+            <span className="needs-label" title="Each scenario sets these in its Variables zone. Adding this card to a scenario creates any that are missing.">
+              <Icon name="variable" size={12} /> Per scenario:
+            </span>
+          ) : (
+            <span className="needs-label" title="Values come from this scenario's Variables zone">
+              <Icon name="variable" size={12} /> From scenario:
+            </span>
+          )}
+          {(p.context === 'library' ? result.needs : fromScope).map((n) => (
+            <span key={n} className="var-chip">{n}</span>
+          ))}
+          {p.context === 'scenario' && result.missing.length > 0 && p.onAddMissing && (
+            <button type="button" className="var-chip var-chip--add" onClick={() => p.onAddMissing!(result.missing)}>
+              <Icon name="plus" size={11} /> Add {result.missing.join(', ')} to scenario
+            </button>
+          )}
+        </div>
+      )}
+
       {def.fields.length > 0 && (
         <div className="fields">
           {def.fields.map((f) => (
@@ -311,16 +344,14 @@ function CardViewImpl(p: CardViewProps) {
         </div>
       </div>
 
-      {formulaFocus && !readOnly && def.fields.some((f) => f.name.trim()) && (
+      {formulaFocus && !readOnly && chipNames.length > 0 && (
         <div className="name-chips" onMouseDown={(e) => e.preventDefault()}>
           <span>Insert:</span>
-          {def.fields
-            .filter((f) => f.name.trim() && f.id !== formulaFocus)
-            .map((f) => (
-              <button type="button" key={f.id} className="chip" onClick={() => insertName(f.name.trim())}>
-                {f.name.trim()}
-              </button>
-            ))}
+          {chipNames.map((n) => (
+            <button type="button" key={n} className="chip" onClick={() => insertName(n)}>
+              {n}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -331,7 +362,7 @@ function badge(kind: CardDef['kind']) {
   return kind === 'income' ? '+$' : kind === 'expense' ? '−$' : <Icon name="clock" size={13} />;
 }
 
-function FieldRow(props: {
+export function FieldRow(props: {
   name: string;
   expr: string;
   role: 'variable' | 'equation';
@@ -345,6 +376,8 @@ function FieldRow(props: {
   onName?: (v: string) => void;
   onExpr: (v: string) => void;
   onRemove?: () => void;
+  /** Placeholder for the value input. */
+  placeholder?: string;
 }) {
   const r = props.result;
   const nameRef = useRef<HTMLDivElement>(null);
@@ -384,7 +417,7 @@ function FieldRow(props: {
           className="field-input"
           value={props.expr}
           readOnly={props.readOnly}
-          placeholder={props.role === 'equation' ? '=formula' : '0'}
+          placeholder={props.placeholder ?? (props.role === 'equation' ? '=formula' : '0')}
           inputMode={isFormula ? 'text' : 'decimal'}
           spellCheck={false}
           data-field={props.fieldId}
@@ -404,8 +437,12 @@ function FieldRow(props: {
         )}
       </div>
       {(r?.error || isFormula) && (
-        <div className={'field-result' + (r?.error ? ' is-error' : '')}>
-          {r?.error ? r.error : '= ' + (props.unit ? fmtUnit(r!.value, props.unit) : num(r!.value))}
+        <div className={'field-result' + (r?.error ? ' is-error' : r?.pending ? ' is-pending' : '')}>
+          {r?.error
+            ? r.error
+            : r?.pending
+              ? 'Set per scenario'
+              : '= ' + (props.unit ? fmtUnit(r!.value, props.unit) : num(r!.value))}
         </div>
       )}
     </div>

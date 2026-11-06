@@ -1,5 +1,24 @@
 import { emptyData, sampleData, useStore } from '../store';
-import { confirmDialog } from './Dialog';
+import { confirmDialog, toast } from './Dialog';
+
+/** Add a library card to a scenario, toasting the outcome (incl. auto-created variables). */
+export function addCardWithToast(scenarioId: string, libraryId: string): boolean {
+  const st = useStore.getState();
+  const card = st.library.find((c) => c.id === libraryId);
+  const sc = st.scenarios.find((s) => s.id === scenarioId);
+  const added = st.addCardToScenario(scenarioId, libraryId);
+  const name = card?.name ?? 'That card';
+  if (!added) {
+    toast(`“${name}” is already linked in this scenario`);
+    return false;
+  }
+  toast(
+    added.length
+      ? `Added “${name}” · new scenario variable${added.length > 1 ? 's' : ''} ${added.join(', ')} — set ${added.length > 1 ? 'their values' : 'its value'}`
+      : `Added “${name}” to ${sc?.name ?? 'the scenario'}`,
+  );
+  return true;
+}
 
 /** Shared, confirmed delete used by the editor button, the rack menu and the Delete key. */
 export async function askDeleteScenario(id: string) {

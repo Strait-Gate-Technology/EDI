@@ -56,7 +56,12 @@ export interface Scenario {
   name: string;
   location: ScenarioLocation;
   cards: ScenarioCard[];
+  /** Scenario-specific values (e.g. Distance) that cards can refer to by name. */
+  variables: Field[];
 }
+
+/** Physical limit on hours: 24 h × 365 days (shown as 168 h/week). */
+export const MAX_ANNUAL_HOURS = 24 * 365;
 
 export const FREQUENCIES: { id: Frequency; label: string; perYear: number }[] = [
   { id: 'daily', label: 'Daily', perYear: 365 },

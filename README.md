@@ -23,12 +23,22 @@ npm run dev      # http://localhost:5178
 - **Scenarios (right):** `+ New Scenario`, then drag cards by their grip into the matching zone
   (type-enforced). Dropped cards are **linked** copies: parent edits flow through. Click the chain
   icon to unlink and customise; re-drag from the library to get a linked copy again.
+- **Scenario variables:** the *Variables* zone below *Hours* holds values that belong to one
+  scenario, such as `Distance` or `Minutes each way`. A card formula may use a name it doesn't
+  define itself; each scenario supplies the value, so one *Gas* card serves every commute. In the
+  library such cards show *Per scenario: Distance*. Adding the card to a scenario that lacks the
+  variable creates it (empty) and focuses it. A card's own fields win over a scenario variable
+  with the same name.
+- **Limits:** income, expense and hours values can't be negative (flagged, counted as 0). A
+  scenario's hours can't exceed 168 h/week (24 h × 365 days a year); above that EDI / hour isn't
+  computed. A negative EDI is allowed and shown in red with ⚠.
 - **Tax:** pick a nation (Canada / U.S.) and province / state with the flag pills in the top bar.
   Every scenario follows that default; change it in the scenario's *Incomes* zone and the scenario
   gets a suffix such as "(Ontario 🏳)" or "(U.S. 🏳, Maine 🏳)". Setting it back to the default
   re-links it and drops the suffix. Income marked *Taxable* is taxed with 2026 federal + provincial /
   state brackets (see *Tax data* below); the *Income tax* card shows the breakdown.
-- **Analysis:** side-by-side columns (1–6). Drag a column onto another to swap, onto the pool or the
+- **Analysis:** side-by-side columns (at least 3; drop a scenario in to add one). Each shows
+  EDI / hour and, beside it, *Total EDI* for the selected period. Drag a column onto another to swap, onto the pool or the
   top rack to take it off stage; drag scenarios from the top rack or pool into a column.
 - **Sharing:** the share button (top right) or ☰ → *Share project…* builds a link that contains the
   whole project (cards, scenarios, tax locations, Analysis stage), compressed into the URL fragment
