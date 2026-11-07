@@ -44,6 +44,9 @@ npm run dev      # http://localhost:5178
   whole project (cards, scenarios, tax locations, Analysis stage), compressed into the URL fragment
   (`#p=…`), so nothing is uploaded. It can also be shown as a QR code. Opening a link offers to add
   the shared scenarios alongside yours or replace yours.
+- **First visit:** new visitors start empty (no cards or scenarios; tax location New Brunswick,
+  Canada) and see a welcome with *Get started* or *Take the tour*, five tooltips over the real UI.
+  The tour is also in the ☰ menu, and ☰ → *Load sample data* loads the example project.
 - Everything persists in `localStorage`; the ☰ menu exports/imports JSON and has
   *Reduce visual effects* for slower machines.
 

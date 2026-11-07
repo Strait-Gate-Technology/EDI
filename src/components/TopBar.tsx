@@ -5,6 +5,7 @@ import { askClearAll, askDeleteScenario, askLoadSample, askStartOver } from './a
 import { alertDialog } from './Dialog';
 import { EdiPerHour } from './Edi';
 import { LocationPicker, ScenarioTitle } from './Flag';
+import { startTour } from './Tour';
 import { openShare } from './Share';
 import { DRAG_SCENARIO, DRAG_SLOT, scrollAndFocus, useAllTotals } from './hooks';
 import { Icon, Menu, cycle } from './ui';
@@ -238,6 +239,7 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
               hint: 'Stops colour cycling & background drift',
               onClick: () => setReduceEffects(!reduceEffects),
             },
+            { label: 'Take the tour', hint: 'Five quick tips', onClick: startTour },
             { label: 'Share project…', hint: 'Link or QR code with everything', onClick: () => openShare() },
             { label: 'Export JSON', hint: 'Download all cards & scenarios', onClick: exportData },
             { label: 'Import JSON…', hint: 'Replace with an export', onClick: () => fileRef.current?.click() },

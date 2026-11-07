@@ -271,10 +271,30 @@ const DEFAULTS: Record<Kind, { name: string; frequency: Frequency }> = {
   hours: { name: 'New hours', frequency: 'weekly' },
 };
 
+const STORAGE_KEY = 'edi-app';
+const WELCOMED_KEY = 'edi-welcomed';
+
+/**
+ * True on a browser's first visit (nothing saved yet). Read before the store hydrates or
+ * writes anything. Visitors from before the welcome existed already have saved data.
+ */
+export const FIRST_VISIT: boolean = (() => {
+  try {
+    return !localStorage.getItem(STORAGE_KEY) && !localStorage.getItem(WELCOMED_KEY);
+  } catch {
+    return false;
+  }
+})();
+
+export function markWelcomed() {
+  try { localStorage.setItem(WELCOMED_KEY, '1'); } catch { /* private mode */ }
+}
+
 export const useStore = create<Store>()(
   persist(
     immer((set, get) => ({
-      ...sampleData(),
+      // New visitors get a fresh start: no cards, no scenarios, default location (Canada / NB).
+      ...emptyData(),
       focusTarget: null,
       mobilePane: 'scenario',
       setMobilePane: (p) => set((s) => { s.mobilePane = p; }),
@@ -528,7 +548,7 @@ export const useStore = create<Store>()(
       clearFocus: (id) => set((s) => { if (s.focusTarget?.id === id) s.focusTarget = null; }),
     })),
     {
-      name: 'edi-app',
+      name: STORAGE_KEY,
       version: 4,
       storage: createJSONStorage(() => debouncedStorage()),
       migrate: (persisted, version) => {

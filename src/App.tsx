@@ -8,6 +8,7 @@ import { ScenarioPanel } from './components/ScenarioPanel';
 import { useIncomingShare } from './components/Share';
 import { TaxNotice } from './components/TaxNotice';
 import { TopBar } from './components/TopBar';
+import { Tour, Welcome } from './components/Tour';
 import { Icon } from './components/ui';
 import { useStore, type MobilePane } from './store';
 
@@ -55,6 +56,8 @@ export default function App() {
       <TaxNotice />
       <DialogHost />
       <ToastHost />
+      <Welcome />
+      <Tour />
     </div>
   );
 }
