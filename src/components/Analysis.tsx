@@ -2,8 +2,9 @@ import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from
 import { fmtUnit, hoursFmt, money, pct, type ScenarioTotals } from '../calc';
 import { MIN_COLUMNS, useStore } from '../store';
 import { countryOf, flagId, regionName } from '../tax/regions';
-import { KINDS, KIND_META, PERIODS, type Scenario } from '../types';
-import { EdiAmount, EdiPerHour } from './Edi';
+import { KINDS, KIND_META, PERIODS, describePoi, fmtDate, poiDetail, type Scenario } from '../types';
+import { focusPeriod } from './actions';
+import { EdiAmount, EdiPerHour, NEEDS_PERIOD_MSG } from './Edi';
 import { Flag, ScenarioTitle } from './Flag';
 import { DRAG_SCENARIO, DRAG_SLOT, useAllTotals } from './hooks';
 import { Icon, cycle } from './ui';
@@ -38,7 +39,7 @@ export function Analysis({ mobile = false }: { mobile?: boolean }) {
     const sorted = [...shown].sort((a, b) => (totals.get(b)!.ediPerHour ?? -Infinity) - (totals.get(a)!.ediPerHour ?? -Infinity));
     const ts = shown.map((id) => totals.get(id)!);
     const m: Record<string, number> = {};
-    for (const met of METRICS) m[met.key] = Math.max(1e-9, ...ts.map((t) => Math.abs(met.get(t))));
+    for (const met of METRICS) m[met.key] = Math.max(1e-9, ...ts.map((t) => Math.abs(met.get(t)) || 0));
     m.eph = Math.max(1e-9, ...ts.map((t) => Math.abs(t.ediPerHour ?? 0)));
     return { ranks: new Map(sorted.map((id, i) => [id, i + 1])), maxes: m };
     // shownKey stands in for `shown`, which is a new array each render
@@ -140,7 +141,7 @@ export function Analysis({ mobile = false }: { mobile?: boolean }) {
                   title={mobile ? 'Tap to add to the stage' : 'Click to add as a column, or drag onto the stage'}
                 >
                   <span className="tab-name"><ScenarioTitle scenario={s} /></span>
-                  <span className={'tab-metric' + ((t.ediPerHour ?? 0) < 0 ? ' neg' : '')}><EdiPerHour t={t} /><small>/h</small></span>
+                  <span className={'tab-metric' + ((t.ediPerHour ?? 0) < 0 || t.needsPeriod ? ' neg' : '')}><EdiPerHour t={t} /><small>/h</small></span>
                 </button>
               );
             })}
@@ -245,18 +246,26 @@ const Column = memo(function Column(props: {
         </div>
       </header>
 
+      {t.poi && <div className="col-poi" title={`Period of Interest: ${poiDetail(t.poi)}`}>{describePoi(t.poi)}</div>}
+
       <div className="col-hero">
         <div className="hero-pair">
           <div className="hero-fig">
             <span className="big-label">EDI / hour</span>
-            <span className={'hero-value' + ((t.ediPerHour ?? 0) < 0 || t.overHours ? ' neg' : '')}><EdiPerHour t={t} /></span>
+            <span className={'hero-value' + ((t.ediPerHour ?? 0) < 0 || t.overHours || t.needsPeriod ? ' neg' : '')}><EdiPerHour t={t} /></span>
           </div>
           <div className="hero-fig hero-fig--total">
             <span className="big-label">Total EDI <small>/{pm.short}</small></span>
-            <span className={'hero-total' + (t.edi < 0 ? ' neg' : '')}><EdiAmount value={per(t.edi)} whole /></span>
+            <span className={'hero-total' + (t.edi < 0 || t.needsPeriod ? ' neg' : '')}><EdiAmount value={per(t.edi)} whole /></span>
           </div>
         </div>
         <Bar value={t.ediPerHour ?? 0} max={props.maxes.eph} />
+        {t.needsPeriod && (
+          <p className="col-warn" title={NEEDS_PERIOD_MSG}>
+            ⚠ One-time cards need a Period of Interest.{' '}
+            <button type="button" className="link-btn" onClick={() => focusPeriod(sc.id)}>Set period</button>
+          </p>
+        )}
       </div>
 
       <div className="col-metrics">
@@ -268,7 +277,7 @@ const Column = memo(function Column(props: {
                 <span>{m.label} <small>/{pm.short}</small></span>
                 <b className={v < 0 ? 'neg' : ''}>{fmtUnit(per(v), m.unit)}</b>
               </div>
-              <Bar value={v} max={props.maxes[m.key]} kind={m.key} />
+              <Bar value={Number.isFinite(v) ? v : 0} max={props.maxes[m.key]} kind={m.key} />
             </div>
           );
         })}
@@ -294,7 +303,11 @@ const Column = memo(function Column(props: {
                     <span>
                       {i.def.name}
                       {!i.card.linked && <em title="Unlinked / customised"> ✎</em>}
-                      {g.kind === 'income' && !i.def.taxable && <em title="Non-taxable"> NT</em>}
+                      {i.def.frequency === 'once' ? (
+                        <em title={`One-time${i.def.date ? ', ' + fmtDate(i.def.date) : ''}${i.outOfPeriod ? ': outside the period, not counted' : ''}${t.poiDays ? ` · spread over ${t.poiDays} days` : ''}`}> 1×</em>
+                      ) : (
+                        g.kind === 'income' && !i.def.taxable && <em title="Non-taxable"> NT</em>
+                      )}
                     </span>
                     <span>{KIND_META[g.kind].unit === 'h' ? hoursFmt(per(i.annual)) : money(per(i.annual))}</span>
                   </li>

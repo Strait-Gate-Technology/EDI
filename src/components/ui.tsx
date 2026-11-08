@@ -24,7 +24,7 @@ export function cycle(seed: string, minSec = 150, maxSec = 480): CSSProperties {
 
 type IconName =
   | 'plus' | 'link' | 'unlink' | 'trash' | 'grip' | 'copy' | 'x' | 'chart' | 'back' | 'arrow'
-  | 'clock' | 'up' | 'down' | 'menu' | 'swap' | 'jump' | 'share' | 'qr' | 'warn' | 'variable';
+  | 'clock' | 'up' | 'down' | 'menu' | 'swap' | 'jump' | 'share' | 'qr' | 'warn' | 'variable' | 'calendar';
 
 const PATHS: Record<IconName, ReactNode> = {
   plus: <path d="M12 5v14M5 12h14" />,
@@ -60,6 +60,7 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M12 7.5V12l3 2" />
     </>
   ),
+  calendar: <path d="M4 6h16v14H4zM4 10h16M8 3.5v4M16 3.5v4" />,
   up: <path d="M6 15l6-6 6 6" />,
   down: <path d="M6 9l6 6 6-6" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,

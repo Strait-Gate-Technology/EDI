@@ -3,10 +3,11 @@ import { cardFreeNames, effectiveDef, hoursFmt, money, pct, type ScenarioTotals 
 import { scenarioLocation, useStore } from '../store';
 import { TAX_ASSUMPTIONS, TAX_YEAR, hasIncomeTax } from '../tax/engine';
 import { countryOf, flagId, regionName } from '../tax/regions';
-import { KINDS, KIND_META, PERIODS, type CardDef, type Kind, type Scenario } from '../types';
-import { addCardWithToast, askDeleteScenario } from './actions';
+import { KINDS, KIND_META, PERIODS, describePoi, isTimeAware, poiDetail, type CardDef, type Kind, type Scenario } from '../types';
+import { PeriodPicker } from './PeriodPicker';
+import { addCardWithToast, askDeleteScenario, focusPeriod, toastNeedsPeriod } from './actions';
 import { CardView, FieldRow } from './CardView';
-import { EdiAmount, EdiPerHour, OVER_HOURS_MSG } from './Edi';
+import { EdiAmount, EdiPerHour, NEEDS_PERIOD_MSG, OVER_HOURS_MSG } from './Edi';
 import { Flag, LocationPicker, LocationSuffix } from './Flag';
 import { DRAG_PARENT_PREFIX, scrollAndFocus, useAllTotals, useLibraryMap } from './hooks';
 import { DRAG_LIB } from './LibraryPanel';
@@ -76,6 +77,10 @@ function ScenarioEditor({ scenario }: { scenario: Scenario }) {
           <LocationSuffix loc={loc} />
         </div>
         <ScenarioLocationControl scenario={scenario} />
+        <div className="zone-location">
+          <span className="zone-location-label">Period of interest</span>
+          <PeriodPicker scenario={scenario} needed={totals.needsPeriod} />
+        </div>
         <div className="scenario-tools">
           <button type="button" className="glass-btn icon-btn" title="Duplicate scenario" aria-label="Duplicate scenario" onClick={() => dup(scenario.id)}>
             <Icon name="copy" />
@@ -99,7 +104,7 @@ function ScenarioEditor({ scenario }: { scenario: Scenario }) {
         <VariablesZone scenario={scenario} lib={lib} totals={totals} />
       </div>
 
-      <TotalsFooter totals={totals} seed={scenario.id} />
+      <TotalsFooter totals={totals} seed={scenario.id} scenarioId={scenario.id} />
     </article>
   );
 }
@@ -254,6 +259,9 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
               onJumpToParent={linked && c.parentId ? () => jump(c.parentId!) : undefined}
               scope={totals.scope}
               onAddMissing={(names) => addMissing(scenario.id, names)}
+              poi={scenario.poi ?? null}
+              onSetPeriod={() => focusPeriod(scenario.id)}
+              onOneTime={() => !isTimeAware(scenario) && toastNeedsPeriod(def.name, scenario.id)}
             />
           );
         })}
@@ -367,7 +375,7 @@ function VariablesZone({ scenario, lib, totals }: { scenario: Scenario; lib: Map
   );
 }
 
-export function TotalsFooter({ totals, seed }: { totals: ScenarioTotals; seed: string }) {
+export function TotalsFooter({ totals, seed, scenarioId }: { totals: ScenarioTotals; seed: string; scenarioId?: string }) {
   const period = useStore((s) => s.period);
   const pm = PERIODS.find((p) => p.id === period)!;
   const per = (n: number) => n / pm.perYear;
@@ -391,15 +399,31 @@ export function TotalsFooter({ totals, seed }: { totals: ScenarioTotals; seed: s
       <div className="headline">
         <div className="big">
           <span className="big-label">EDI <small>/{pm.short}</small></span>
-          <span className={'big-value' + (totals.edi < 0 ? ' neg' : '')}><EdiAmount value={per(totals.edi)} /></span>
+          <span className={'big-value' + (totals.edi < 0 || totals.needsPeriod ? ' neg' : '')}>
+            {totals.needsPeriod ? <>—<WarnMark title={NEEDS_PERIOD_MSG} /></> : <EdiAmount value={per(totals.edi)} />}
+          </span>
         </div>
         <div className="big big--accent">
           <span className="big-label">EDI / hour</span>
-          <span className={'big-value' + ((totals.ediPerHour ?? 0) < 0 ? ' neg' : '')}>
+          <span className={'big-value' + ((totals.ediPerHour ?? 0) < 0 || totals.needsPeriod ? ' neg' : '')}>
             <EdiPerHour t={totals} />
           </span>
         </div>
       </div>
+      {totals.needsPeriod && (
+        <p className="totals-warn">
+          One-time cards need a Period of Interest (top of the scenario), such as “2026 · 1 year”.{' '}
+          {scenarioId && <button type="button" className="link-btn" onClick={() => focusPeriod(scenarioId)}>Set period</button>}
+        </p>
+      )}
+      {totals.poi && totals.periodEdi != null && (
+        <p className="totals-period">
+          Over <span title={poiDetail(totals.poi)}>{describePoi(totals.poi)}</span> ({totals.poiDays} days): EDI <b className={totals.periodEdi < 0 ? 'neg' : ''}>{money(totals.periodEdi)}</b>
+          {(totals.oneTimeIncome > 0 || totals.oneTimeExpense > 0) && (
+            <> · one-time {totals.oneTimeIncome > 0 && `+${money(totals.oneTimeIncome)}`}{totals.oneTimeIncome > 0 && totals.oneTimeExpense > 0 && ' / '}{totals.oneTimeExpense > 0 && money(-totals.oneTimeExpense)}</>
+          )}
+        </p>
+      )}
       {totals.errors > 0 && <p className="totals-warn">{totals.errors} card{totals.errors > 1 ? 's have' : ' has'} errors (counted as 0).</p>}
       {totals.overHours && (
         <p className="totals-warn">

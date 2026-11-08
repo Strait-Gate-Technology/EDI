@@ -1140,3 +1140,85 @@ body.is-mobile .hero-pair .hero-value { font-size: clamp(22px, 14cqi, 32px); }
 .tour-skip { background: none; border: 0; color: var(--muted); font-size: 12px; padding: 4px 0; cursor: pointer; }
 .tour-skip:hover { color: var(--text); text-decoration: underline; }
 body.calm .tour-spot { transition: none; }
+
+/* ---------- One-time cards & Periods of Interest ---------- */
+.poi-pill { padding: 0 8px 0 9px; gap: 6px; font-size: 12px; color: var(--text); white-space: nowrap; }
+.poi-pill.is-empty { color: var(--muted); }
+.poi-pill-sub { opacity: 0.8; }
+.poi-pill.is-bad { color: var(--neg); border-color: hsl(355 90% 70% / 0.55); }
+.poi-picker { border-radius: 99px; }
+.poi-picker.is-attention .poi-pill { animation: poi-pulse 0.8s ease-in-out 3; }
+@keyframes poi-pulse {
+  0%, 100% { box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.16); }
+  50% { border-color: hsl(45 100% 70% / 0.9); box-shadow: 0 0 0 4px hsl(45 100% 70% / 0.25), 0 0 18px hsl(45 100% 70% / 0.45); }
+}
+body.calm .poi-picker.is-attention .poi-pill { animation: none; border-color: hsl(45 100% 70% / 0.9); }
+.poi-pop { width: 380px; max-width: calc(100vw - 32px); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.poi-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.poi-chip {
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid hsl(0 0% 100% / 0.16);
+  background: hsl(0 0% 100% / 0.06);
+  color: var(--text);
+  font-size: 12px;
+}
+.poi-chip:hover { background: hsl(0 0% 100% / 0.14); border-color: hsl(0 0% 100% / 0.3); }
+.poi-row { display: grid; grid-template-columns: 62px auto 1fr; align-items: center; gap: 8px; }
+.poi-row-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.poi-seg button { padding: 4px 8px; }
+.poi-row > input, .poi-duration { min-width: 0; justify-self: stretch; }
+.poi-duration { display: flex; gap: 6px; }
+.poi-year { width: 100%; font: inherit; font-size: 12px; }
+.poi-n { width: 56px; font: inherit; font-size: 12px; }
+.poi-unit { flex: 1; min-width: 0; }
+.poi-pop .is-bad { border-color: var(--neg); }
+.poi-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid hsl(0 0% 100% / 0.1); padding-top: 8px; }
+.poi-resolved { flex: 1; font-size: 11.5px; color: var(--muted); }
+.poi-resolved.neg { color: var(--neg); }
+.poi-clear { font-size: 12px; color: var(--muted); }
+.poi-clear:hover { color: var(--neg); }
+.date-input { padding: 3px 6px; font: inherit; font-size: 12px; color-scheme: dark; min-width: 0; }
+.date-input:disabled { opacity: 0.75; }
+.date-pill-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.date-pill { height: 26px; padding: 0 8px; gap: 5px; font-size: 12px; color: var(--text); white-space: nowrap; }
+.date-pill.is-empty { color: var(--muted); border-style: dashed; }
+.date-pill.is-bad { color: var(--neg); border-color: hsl(355 90% 70% / 0.55); }
+.date-pill.is-static { cursor: default; }
+.date-pill-clear { display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.date-pill-clear:hover, .date-pill-clear:focus-visible { background: hsl(0 0% 100% / 0.12); color: var(--text); }
+
+.not-taxed { font-size: 11px; color: var(--muted); cursor: help; border-bottom: 1px dotted currentColor; }
+.when-note {
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.when-note.is-error { color: var(--neg); }
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-style: normal;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.totals-period { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.totals-period b { color: var(--text, inherit); }
+.totals-period .neg { color: var(--neg); }
+.col-poi { margin: -2px 0 6px; font-size: 11px; color: var(--muted); }
+.col-warn { margin-top: 6px; font-size: 12px; color: var(--neg); }
+
+body.is-mobile .poi-pop { width: auto; max-width: none; padding: 12px; }
+@media (max-width: 480px) {
+  .poi-row { grid-template-columns: 1fr; gap: 6px; }
+  .poi-seg { justify-self: start; }
+}

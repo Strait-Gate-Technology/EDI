@@ -1,5 +1,7 @@
 import { emptyData, sampleData, useStore } from '../store';
+import { isTimeAware } from '../types';
 import { confirmDialog, toast } from './Dialog';
+import { openPeriodPicker } from './PeriodPicker';
 
 /** Add a library card to a scenario, toasting the outcome (incl. auto-created variables). */
 export function addCardWithToast(scenarioId: string, libraryId: string): boolean {
@@ -12,12 +14,48 @@ export function addCardWithToast(scenarioId: string, libraryId: string): boolean
     toast(`“${name}” is already linked in this scenario`);
     return false;
   }
+  if (card?.frequency === 'once' && sc && !isTimeAware(sc)) {
+    toastNeedsPeriod(name, scenarioId);
+    return true;
+  }
   toast(
     added.length
       ? `Added “${name}” · new scenario variable${added.length > 1 ? 's' : ''} ${added.join(', ')} — set ${added.length > 1 ? 'their values' : 'its value'}`
       : `Added “${name}” to ${sc?.name ?? 'the scenario'}`,
   );
   return true;
+}
+
+/** Guidance when a one-time card lands in a scenario without a Period of Interest. */
+export function toastNeedsPeriod(name: string, scenarioId: string) {
+  toast(`“${name}” is one-time: set this scenario’s Period of Interest (top of the scenario, e.g. “2026 · 1 year”) to count it`);
+  focusPeriod(scenarioId, false);
+}
+
+/**
+ * Bring a scenario's Period of Interest picker into view and pulse it.
+ * `focus` also opens the picker with the cursor in its Starting input.
+ */
+export function focusPeriod(scenarioId: string, focus = true) {
+  const st = useStore.getState();
+  if (st.activeScenarioId !== scenarioId) st.setActive(scenarioId);
+  if (st.view !== 'build') st.setView('build');
+  if (st.mobilePane !== 'scenario' && document.body.classList.contains('is-mobile')) st.setMobilePane('scenario');
+  let tries = 0;
+  const go = () => {
+    const el = document.querySelector<HTMLElement>(`[data-poi="${scenarioId}"]`);
+    if (!el) {
+      if (tries++ < 20) requestAnimationFrame(go);
+      return;
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    el.classList.remove('is-attention');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('is-attention');
+    setTimeout(() => el.classList.remove('is-attention'), 2400);
+    if (focus) openPeriodPicker(scenarioId);
+  };
+  requestAnimationFrame(go);
 }
 
 /** Shared, confirmed delete used by the editor button, the rack menu and the Delete key. */

@@ -167,7 +167,7 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
               title={mobile ? `${s.name} — long-press for options` : view === 'analysis' ? `Drag “${s.name}” onto a column, or click to edit. Right-click for options.` : `Edit ${s.name}. Right-click for options; Delete key deletes.`}
             >
               <span className="tab-name"><ScenarioTitle scenario={s} compact /></span>
-              <span className={'tab-metric' + ((t?.ediPerHour ?? 0) < 0 ? ' neg' : '')}>{t ? <EdiPerHour t={t} /> : '—'}<small>/h</small></span>
+              <span className={'tab-metric' + ((t?.ediPerHour ?? 0) < 0 || t?.needsPeriod ? ' neg' : '')}>{t ? <EdiPerHour t={t} /> : '—'}<small>/h</small></span>
             </button>
           );
         })}

@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { VALUE_ID, evaluateCard, fmtUnit, num, type FieldResult, type Scope } from '../calc';
+import { VALUE_ID, evaluateCard, fmtUnit, money, num, oneTimeProblem, type FieldResult, type Scope } from '../calc';
 import { uid, useStore } from '../store';
-import { FREQUENCIES, KIND_META, PER_YEAR, PERIODS, type CardDef } from '../types';
+import { FREQUENCIES, KIND_META, PER_YEAR, PERIODS, fmtDate, fmtPeriod, poiDays, type CardDef, type PeriodOfInterest } from '../types';
 import { DRAG_PARENT, scrollAndFocus } from './hooks';
 import { Icon, InlineName, Menu, cycle } from './ui';
 
@@ -33,6 +33,12 @@ export interface CardViewProps {
   /** Drop handler for reordering (scenario cards). */
   dropAccept?: string;
   onDropBefore?: (draggedId: string) => void;
+  /** Scenario cards: the scenario's Period of Interest (one-time cards are counted over it). */
+  poi?: PeriodOfInterest | null;
+  /** Scenario cards: show the scenario's Period of Interest picker. */
+  onSetPeriod?: () => void;
+  /** The frequency was just switched to One-time. */
+  onOneTime?: () => void;
 }
 
 /**
@@ -152,13 +158,23 @@ function CardViewImpl(p: CardViewProps) {
   const fromScope = result.needs.filter((n) => !result.missing.includes(n));
   const linkedRO = p.context === 'scenario' && p.linked;
 
+  // One-time (lump sum) cards.
+  const once = def.frequency === 'once' && def.kind !== 'hours';
+  const inScenario = p.context === 'scenario';
+  const days = inScenario ? poiDays(p.poi) : null;
+  const problem = once && inScenario ? oneTimeProblem(def, p.poi) : null;
+  const verb = def.kind === 'expense' ? 'Paid' : 'Received';
+  const lump = result.value.error || result.value.pending ? NaN : result.oneTime;
+  const lumpPerPeriod = days ? (lump * 365) / days / periodMeta.perYear : NaN;
+  const freqs = FREQUENCIES.filter((f) => f.id !== 'once' || def.kind !== 'hours');
+
   return (
     <div
       ref={cardRef}
       className={
         `card card--${def.kind} cycle` +
         (readOnly ? ' is-readonly' : '') +
-        (result.hasError ? ' has-error' : '') +
+        (result.hasError || problem ? ' has-error' : '') +
         (result.value.pending ? ' is-pending' : '') +
         (dropHover ? ' drop-before' : '')
       }
@@ -320,13 +336,31 @@ function CardViewImpl(p: CardViewProps) {
             value={def.frequency}
             disabled={readOnly}
             aria-label="Frequency"
-            onChange={(e) => onChange?.((d) => { d.frequency = e.target.value as CardDef['frequency']; })}
+            onChange={(e) => {
+              const f = e.target.value as CardDef['frequency'];
+              onChange?.((d) => { d.frequency = f; });
+              if (f === 'once') p.onOneTime?.();
+            }}
           >
-            {FREQUENCIES.map((f) => (
+            {freqs.map((f) => (
               <option key={f.id} value={f.id}>{f.label}</option>
             ))}
           </select>
-          {def.kind === 'income' && (
+          {once && (
+            <DatePill
+              date={def.date}
+              verb={verb}
+              readOnly={readOnly}
+              bad={problem === 'out-of-period'}
+              min={inScenario && days ? p.poi!.start : undefined}
+              max={inScenario && days ? p.poi!.end : undefined}
+              onSet={(v) => onChange?.((d) => { d.date = v; })}
+            />
+          )}
+          {once && def.kind === 'income' && (
+            <span className="not-taxed" title="One-time amounts aren’t taxed yet">Not taxed</span>
+          )}
+          {def.kind === 'income' && !once && (
             <select
               className="glass-select"
               value={def.taxable ? 'taxable' : 'non'}
@@ -338,11 +372,44 @@ function CardViewImpl(p: CardViewProps) {
               <option value="non">Non-taxable</option>
             </select>
           )}
-          <span className="per-period" title={`${num(result.value.value)} × ${PER_YEAR[def.frequency]}/yr`}>
-            ≈ {fmtUnit(annualPerPeriod, meta.unit)}<small>/{periodMeta.short}</small>
-          </span>
+          {once ? (
+            <span className="per-period" title={days ? `${money(lump)} spread over ${days} days` : 'A single lump sum'}>
+              One-time {money(lump)}
+              {days != null && !problem && Number.isFinite(lumpPerPeriod) && (
+                <> · ≈ {money(lumpPerPeriod)}<small>/{periodMeta.short}</small></>
+              )}
+            </span>
+          ) : (
+            <span className="per-period" title={`${num(result.value.value)} × ${PER_YEAR[def.frequency]}/yr`}>
+              ≈ {fmtUnit(annualPerPeriod, meta.unit)}<small>/{periodMeta.short}</small>
+            </span>
+          )}
         </div>
       </div>
+
+      {once && (problem || !def.date) && (
+        <div className={'when-note' + (problem ? ' is-error' : '')}>
+          {!inScenario ? (
+            'No date: counts at the start of each scenario’s Period of Interest'
+          ) : problem === 'needs-period' ? (
+            <>
+              <span>⚠ Needs this scenario’s Period of Interest to be counted</span>
+              {p.onSetPeriod && (
+                <button type="button" className="link-btn" onClick={p.onSetPeriod}>Set period</button>
+              )}
+            </>
+          ) : problem === 'out-of-period' ? (
+            <span>
+              ⚠ {fmtDate(def.date)} is outside this scenario’s period ({fmtPeriod(p.poi!)}); not counted.{' '}
+              {p.linked
+                ? 'Change the library card’s date, unlink to give this scenario its own date, or widen the period.'
+                : 'Change the date or the period.'}
+            </span>
+          ) : (
+            `${verb} at the start of the period (${fmtDate(p.poi?.start)})`
+          )}
+        </div>
+      )}
 
       {formulaFocus && !readOnly && chipNames.length > 0 && (
         <div className="name-chips" onMouseDown={(e) => e.preventDefault()}>
@@ -446,5 +513,93 @@ export function FieldRow(props: {
         </div>
       )}
     </div>
+  );
+}
+
+/** Optional date of a one-time card: a compact pill that turns into a date input only while editing. */
+function DatePill(p: {
+  date?: string;
+  verb: string;
+  readOnly: boolean;
+  bad: boolean;
+  min?: string;
+  max?: string;
+  onSet: (iso: string | undefined) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!editing && refocus.current) {
+      refocus.current = false;
+      pillRef.current?.focus();
+    }
+  }, [editing]);
+
+  const label = p.date ? fmtDate(p.date) : '';
+  if (p.readOnly) {
+    if (!label) return null;
+    return (
+      <span className={'flag-pill date-pill is-static' + (p.bad ? ' is-bad' : '')} title={`Date ${p.verb.toLowerCase()}`}>
+        <Icon name="calendar" size={12} />
+        {label}
+      </span>
+    );
+  }
+  if (editing) {
+    return (
+      <input
+        type="date"
+        className="glass-select date-input"
+        value={p.date ?? ''}
+        min={p.min}
+        max={p.max}
+        autoFocus
+        aria-label={`Date ${p.verb.toLowerCase()} (optional)`}
+        ref={(el) => {
+          if (!el || el.dataset.opened) return;
+          el.dataset.opened = '1';
+          try { el.showPicker(); } catch { /* not supported or not allowed */ }
+        }}
+        onChange={(e) => p.onSet(e.target.value || undefined)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' || e.key === 'Enter') {
+            e.preventDefault();
+            refocus.current = true;
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+  return (
+    <span className="date-pill-wrap">
+      <button
+        ref={pillRef}
+        type="button"
+        className={'flag-pill date-pill' + (label ? '' : ' is-empty') + (p.bad ? ' is-bad' : '')}
+        title={
+          label
+            ? `Date ${p.verb.toLowerCase()} — click to change`
+            : 'Optional. Without a date it counts at the start of the scenario’s Period of Interest.'
+        }
+        onClick={() => setEditing(true)}
+      >
+        <Icon name="calendar" size={12} />
+        {label || 'Add date'}
+      </button>
+      {label && (
+        <button
+          type="button"
+          className="date-pill-clear"
+          title="Remove the date"
+          aria-label="Remove the date"
+          onClick={() => p.onSet(undefined)}
+        >
+          <Icon name="x" size={10} />
+        </button>
+      )}
+    </span>
   );
 }

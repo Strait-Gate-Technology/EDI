@@ -1,7 +1,7 @@
 import { CycleError, FormulaError, evaluateFormula, freeNames, parsePlain, type NameRef } from './formula';
 import { computeTax, type TaxResult } from './tax/engine';
 import type { Location } from './tax/regions';
-import { KIND_META, MAX_ANNUAL_HOURS, PER_YEAR, type CardDef, type Field, type Scenario, type ScenarioCard } from './types';
+import { KIND_META, MAX_ANNUAL_HOURS, PER_YEAR, inPeriod, poiDays, type CardDef, type Field, type PeriodOfInterest, type Scenario, type ScenarioCard } from './types';
 
 export const VALUE_ID = '__value';
 
@@ -18,6 +18,8 @@ export interface CardResult {
   value: FieldResult;
   /** Final value normalised to a year (0 if errored or pending). */
   annual: number;
+  /** One-time cards: the lump sum (0 if errored or pending). Recurring cards: 0. */
+  oneTime: number;
   hasError: boolean;
   /** Names the card uses that it doesn't define — supplied by each scenario. */
   needs: string[];
@@ -190,6 +192,7 @@ export function evaluateCard(def: CardDef, scope?: Scope): CardResult {
     fields: results,
     value,
     annual: value.error || value.pending ? 0 : value.value * PER_YEAR[def.frequency],
+    oneTime: def.frequency === 'once' && !value.error && !value.pending ? value.value : 0,
     hasError: [...results.values()].some((r) => r.error),
     needs,
     missing,
@@ -223,20 +226,53 @@ export interface ScenarioTotals {
   errors: number;
   scope: Scope;
   counts: { income: number; expense: number; hours: number };
-  /** Per-card annualised values, in scenario order. */
-  items: { card: ScenarioCard; def: CardDef; annual: number; error: boolean }[];
+  /** Per-card annualised values, in scenario order (one-time cards: annual equivalent over the period). */
+  items: { card: ScenarioCard; def: CardDef; annual: number; error: boolean; outOfPeriod?: boolean }[];
+  /** Days in the Period of Interest, or null when the scenario isn't time-aware. */
+  poiDays: number | null;
+  poi: PeriodOfInterest | null;
+  /** Has one-time cards but no (valid) Period of Interest: EDI can't be computed. */
+  needsPeriod: boolean;
+  /** Raw one-time sums counted over the period. */
+  oneTimeIncome: number;
+  oneTimeExpense: number;
+  /** EDI over the whole Period of Interest, or null. */
+  periodEdi: number | null;
+}
+
+/** Why a one-time card in a scenario isn't counted (null = it is). */
+export function oneTimeProblem(def: CardDef, poi: PeriodOfInterest | undefined | null): 'needs-period' | 'out-of-period' | null {
+  if (def.frequency !== 'once') return null;
+  if (poiDays(poi) == null) return 'needs-period';
+  if (def.date && !inPeriod(def.date, poi!)) return 'out-of-period';
+  return null;
 }
 
 /** All money / hour totals are annual. */
 export function scenarioTotals(s: Scenario, library: Map<string, CardDef>, location: Location): ScenarioTotals {
   let taxable = 0, nonTaxable = 0, expenses = 0, hours = 0, errors = 0;
+  let oneTimeIncome = 0, oneTimeExpense = 0, needsPeriod = false;
   const counts = { income: 0, expense: 0, hours: 0 };
   const items: ScenarioTotals['items'] = [];
   const scope = evaluateScope(s.variables ?? []);
+  const days = poiDays(s.poi);
   for (const card of s.cards) {
     const def = effectiveDef(card, library);
     const r = evaluateCard(def, scope);
     counts[def.kind]++;
+    if (def.frequency === 'once' && def.kind !== 'hours') {
+      // Lump sum: spread over the Period of Interest as an annual equivalent. Never taxed (for now).
+      const problem = oneTimeProblem(def, s.poi);
+      if (problem === 'needs-period') needsPeriod = true;
+      const error = r.hasError || problem != null;
+      if (error) errors++;
+      const annual = problem ? 0 : (r.oneTime * 365) / days!;
+      items.push({ card, def, annual, error, outOfPeriod: problem === 'out-of-period' });
+      if (problem) continue;
+      if (def.kind === 'income') { nonTaxable += annual; oneTimeIncome += r.oneTime; }
+      else { expenses += annual; oneTimeExpense += r.oneTime; }
+      continue;
+    }
     if (r.hasError) errors++;
     items.push({ card, def, annual: r.annual, error: r.hasError });
     if (def.kind === 'income') {
@@ -248,7 +284,7 @@ export function scenarioTotals(s: Scenario, library: Map<string, CardDef>, locat
   const taxDetail = computeTax(taxable, location.country, location.region);
   const tax = taxDetail.total;
   const netIncome = taxable - tax + nonTaxable;
-  const edi = netIncome - expenses;
+  const edi = needsPeriod ? NaN : netIncome - expenses;
   const overHours = hours > MAX_ANNUAL_HOURS + 1e-6;
   return {
     taxableIncome: taxable,
@@ -261,13 +297,19 @@ export function scenarioTotals(s: Scenario, library: Map<string, CardDef>, locat
     expenses,
     edi,
     hours,
-    ediPerHour: hours > 0 && !overHours ? edi / hours : null,
+    ediPerHour: hours > 0 && !overHours && !needsPeriod ? edi / hours : null,
     weeklyHours: hours / 52,
     overHours,
     errors,
     scope,
     counts,
     items,
+    poiDays: days,
+    poi: days != null ? s.poi! : null,
+    needsPeriod,
+    oneTimeIncome,
+    oneTimeExpense,
+    periodEdi: days != null && !needsPeriod ? (edi * days) / 365 : null,
   };
 }
 

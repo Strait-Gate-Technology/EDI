@@ -37,6 +37,16 @@ npm run dev      # http://localhost:5178
   gets a suffix such as "(Ontario 🏳)" or "(U.S. 🏳, Maine 🏳)". Setting it back to the default
   re-links it and drops the suffix. Income marked *Taxable* is taxed with 2026 federal + provincial /
   state brackets (see *Tax data* below); the *Income tax* card shows the breakdown.
+- **One-time cards and Periods of Interest:** income and expense cards can be *One-time* (a lump
+  sum, such as a signing bonus or a moving cost) with an optional date. A scenario becomes
+  time-aware only when you set its *Period of interest*: the pill in the scenario header opens a
+  picker that starts coarse (quick picks such as *This year*, or a year / month plus a duration like
+  "2026 · 4 months") and offers an exact start day or an *Until date* only when you need them.
+  One-time cards are spread over that period as an equivalent rate, so every per-week / month / year
+  figure and EDI / hour includes them, and the footer also shows EDI for the whole span. An undated
+  card counts at the period's start; a date outside the period is flagged and not counted. A
+  scenario with one-time cards but no period can't be computed (shown "—" with ⚠ and a *Set period*
+  link). One-time amounts aren't taxed yet.
 - **Analysis:** side-by-side columns (at least 3; drop a scenario in to add one). Each shows
   EDI / hour and, beside it, *Total EDI* for the selected period. Drag a column onto another to swap, onto the pool or the
   top rack to take it off stage; drag scenarios from the top rack or pool into a column.
