@@ -45,6 +45,11 @@ export interface ScenarioCard {
   linked: boolean;
   /** Own copy — used once unlinked (or if the parent disappears). */
   def: CardDef;
+  /**
+   * Linked one-time cards: this scenario's own date.
+   * undefined → follow the library card; null → no date (start of the period).
+   */
+  date?: string | null;
 }
 
 export interface ScenarioLocation {

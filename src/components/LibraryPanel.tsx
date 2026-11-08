@@ -52,7 +52,6 @@ export function LibraryPanel() {
                   <Icon name="plus" size={13} /> New
                 </button>
               </div>
-              {cards.length === 0 && <p className="empty-hint">No {KIND_META[kind].plural.toLowerCase()} yet.</p>}
               <div className="lib-cards">
                 {cards.map((c) => (
                   <CardView
@@ -71,6 +70,16 @@ export function LibraryPanel() {
                   />
                 ))}
               </div>
+              <button
+                type="button"
+                className={'add-card-wide' + (cards.length ? '' : ' is-empty')}
+                onClick={() => add(kind)}
+                aria-label={`New ${KIND_META[kind].label.toLowerCase()} card`}
+                title={`New ${KIND_META[kind].label.toLowerCase()} card`}
+              >
+                <Icon name="plus" size={18} />
+                {!cards.length && <small>No {KIND_META[kind].plural.toLowerCase()} yet</small>}
+              </button>
             </section>
           );
         })}

@@ -15,15 +15,15 @@ import { useStore, type MobilePane } from './store';
 
 export default function App() {
   const view = useStore((s) => s.view);
-  const reduceEffects = useStore((s) => s.reduceEffects);
   const pane = useStore((s) => s.mobilePane);
   const setPane = useStore((s) => s.setMobilePane);
   const mobile = useIsMobile();
   useIncomingShare();
 
+  // Visual effects are always reduced (no colour cycling or background drift).
   useEffect(() => {
-    document.body.classList.toggle('calm', reduceEffects);
-  }, [reduceEffects]);
+    document.body.classList.add('calm');
+  }, []);
 
   useEffect(() => {
     document.body.classList.toggle('is-mobile', mobile);

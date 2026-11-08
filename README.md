@@ -17,12 +17,17 @@ npm run dev      # http://localhost:5178
 ## How it works
 
 - **Library (left):** design Income, Expense and Hours cards. Each card has a value + frequency;
-  the (+) menu adds **Variables** and **Equations**. Any field accepts `=formula`
-  (e.g. `=Fuel Price * Distance / 100 * Efficiency`, `[Name]` for odd names, `12%`,
-  `min/max/round/abs/floor/ceil/sqrt/pow`). Circular references are detected and flagged.
+  the (+) menu adds **Variables**, and any field accepts `=formula` (e.g.
+  `=Fuel Price * Distance / 100 * Efficiency`, `[Name]` for odd names, `12%`,
+  `min/max/round/abs/floor/ceil/sqrt/pow`). While typing a formula, matching names are suggested
+  below the box: Enter or Tab completes, ↑/↓ choose, Esc closes; on touch screens tap one.
+  Circular references are detected and flagged. The dashed (+) button at the bottom of each
+  section adds a card.
 - **Scenarios (right):** `+ New Scenario`, then drag cards by their grip into the matching zone
-  (type-enforced). Dropped cards are **linked** copies: parent edits flow through. Click the chain
-  icon to unlink and customise; re-drag from the library to get a linked copy again.
+  (type-enforced). Dropped cards are **linked** copies. Linked copies are editable in place: an edit changes the library card
+  and every linked copy. Click the chain icon to unlink and customise; re-drag from the library to
+  get a linked copy again. The *Hours* zone shows a 0–80+ h/week meter coloured by how busy that is
+  (Light, Moderate, Full-time, Full / active, Busy, Very busy, Maxed).
 - **Scenario variables:** the *Variables* zone below *Hours* holds values that belong to one
   scenario, such as `Distance` or `Minutes each way`. A card formula may use a name it doesn't
   define itself; each scenario supplies the value, so one *Gas* card serves every commute. In the
@@ -44,7 +49,9 @@ npm run dev      # http://localhost:5178
   "2026 · 4 months") and offers an exact start day or an *Until date* only when you need them.
   One-time cards are spread over that period as an equivalent rate, so every per-week / month / year
   figure and EDI / hour includes them, and the footer also shows EDI for the whole span. An undated
-  card counts at the period's start; a date outside the period is flagged and not counted. A
+  card counts at the period's start; a date outside the period is flagged and not counted. On a
+  linked copy the date is this scenario's own (marked *this scenario*; × goes back to the library
+  card's date), and unlinking keeps it. A
   scenario with one-time cards but no period can't be computed (shown "—" with ⚠ and a *Set period*
   link). One-time amounts aren't taxed yet.
 - **Analysis:** side-by-side columns (at least 3; drop a scenario in to add one). Each shows
@@ -57,8 +64,7 @@ npm run dev      # http://localhost:5178
 - **First visit:** new visitors start empty (no cards or scenarios; tax location New Brunswick,
   Canada) and see a welcome with *Get started* or *Take the tour*, five tooltips over the real UI.
   The tour is also in the ☰ menu, and ☰ → *Load sample data* loads the example project.
-- Everything persists in `localStorage`; the ☰ menu exports/imports JSON and has
-  *Reduce visual effects* for slower machines.
+- Everything persists in `localStorage`; the ☰ menu exports/imports JSON.
 
 Source: `src/formula.ts` (parser), `src/calc.ts` (card & scenario maths), `src/store.ts` (state),
 `src/components/*` (UI), `src/styles.css` (glass + per-component hue cycling).

@@ -22,8 +22,6 @@ export interface AppData {
   analysis: { slots: string[] };
   /** App-wide default nation / province-or-state. */
   location: Location;
-  /** Turn off colour cycling & drifting background (for slower machines). */
-  reduceEffects: boolean;
 }
 
 /** Something just created that the UI should scroll to and focus. Not persisted. */
@@ -50,6 +48,9 @@ interface Actions {
    * that parent is already there.
    */
   addCardToScenario: (scenarioId: string, libraryId: string) => string[] | null;
+  /** New library card plus a linked copy at the end of the scenario; returns the scenario card id. */
+  /** Linked one-time card: this scenario's date (undefined = follow the library card). */
+  setScenarioCardDate: (scenarioId: string, cardId: string, date: string | null | undefined) => void;
   addScenarioVariable: (scenarioId: string) => void;
   updateScenarioVariable: (scenarioId: string, varId: string, fn: (f: Field) => void) => void;
   removeScenarioVariable: (scenarioId: string, varId: string) => void;
@@ -74,7 +75,6 @@ interface Actions {
 
   setLocation: (loc: Location) => void;
   setScenarioLocation: (id: string, loc: Location) => void;
-  setReduceEffects: (on: boolean) => void;
   clearFocus: (id: string) => void;
   /** Remove every scenario and library card (keeps location / display settings). */
   startOver: () => void;
@@ -158,7 +158,7 @@ function card(kind: Kind, name: string, value: string, frequency: Frequency, ext
 export function emptyData(): AppData {
   return {
     library: [], scenarios: [], activeScenarioId: null, view: 'build', period: 'monthly',
-    analysis: { slots: [] }, location: { ...DEFAULT_LOCATION }, reduceEffects: false,
+    analysis: { slots: [] }, location: { ...DEFAULT_LOCATION },
   };
 }
 
@@ -214,7 +214,6 @@ export function sampleData(): AppData {
     period: 'monthly',
     analysis: { slots: scenarios.map((s) => s.id) },
     location: { ...DEFAULT_LOCATION },
-    reduceEffects: false,
   };
 }
 
@@ -400,6 +399,21 @@ export const useStore = create<Store>()(
         });
         return added;
       },
+      setScenarioCardDate: (scenarioId, cardId, date) =>
+        set((s) => {
+          const c = s.scenarios.find((x) => x.id === scenarioId)?.cards.find((x) => x.id === cardId);
+          if (!c) return;
+          const parent = c.linked && c.parentId ? s.library.find((d) => d.id === c.parentId) : undefined;
+          if (!parent) {
+            if (date) c.def.date = date;
+            else delete c.def.date;
+            return;
+          }
+          // Same as the library card → just follow it.
+          if (date === (parent.date ?? null)) date = undefined;
+          if (date === undefined) delete c.date;
+          else c.date = date;
+        }),
       addScenarioVariable: (scenarioId) =>
         set((s) => {
           const sc = s.scenarios.find((x) => x.id === scenarioId);
@@ -438,7 +452,10 @@ export const useStore = create<Store>()(
       updateScenarioCard: (scenarioId, cardId, fn) =>
         set((s) => {
           const c = s.scenarios.find((x) => x.id === scenarioId)?.cards.find((x) => x.id === cardId);
-          if (c && !c.linked) fn(c.def);
+          if (!c) return;
+          // Linked: edit the library parent, which every linked copy mirrors.
+          const parent = c.linked && c.parentId ? s.library.find((d) => d.id === c.parentId) : undefined;
+          fn(parent ?? c.def);
         }),
       unlinkScenarioCard: (scenarioId, cardId) =>
         set((s) => {
@@ -446,6 +463,10 @@ export const useStore = create<Store>()(
           if (!c || !c.linked) return;
           const parent = s.library.find((d) => d.id === c.parentId);
           if (parent) c.def = clone(parent);
+          // Keep this scenario's own date.
+          if (c.date) c.def.date = c.date;
+          else if (c.date === null) delete c.def.date;
+          delete c.date;
           c.def.id = uid();
           c.linked = false;
         }),
@@ -510,7 +531,6 @@ export const useStore = create<Store>()(
           // Matching the app-wide default re-links it (and drops the name suffix).
           sc.location = { linked: sameLocation(loc, s.location), country: loc.country, region: loc.region };
         }),
-      setReduceEffects: (on) => set((s) => { s.reduceEffects = on; }),
       importProject: (p, mode) =>
         set((s) => {
           const fresh = reId(p);
@@ -555,7 +575,6 @@ export const useStore = create<Store>()(
         const d = persisted as AppData & { scenarios: (Scenario & { taxRate?: number })[] };
         if (version < 2) {
           d.location ??= { ...DEFAULT_LOCATION };
-          d.reduceEffects ??= false;
           for (const sc of d.scenarios ?? []) {
             delete sc.taxRate;
             sc.location ??= { linked: true, ...d.location };
@@ -563,6 +582,8 @@ export const useStore = create<Store>()(
         }
         if (version < 3) d.analysis = normaliseAnalysis(d.analysis);
         if (version < 4) for (const sc of d.scenarios ?? []) sc.variables ??= [];
+        // Visual effects are always reduced now; drop the old toggle.
+        delete (d as { reduceEffects?: boolean }).reduceEffects;
         return d;
       },
       partialize: (s): AppData => ({
@@ -573,7 +594,6 @@ export const useStore = create<Store>()(
         period: s.period,
         analysis: s.analysis,
         location: s.location,
-        reduceEffects: s.reduceEffects,
       }),
     },
   ),

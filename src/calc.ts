@@ -202,9 +202,28 @@ export function evaluateCard(def: CardDef, scope?: Scope): CardResult {
   return res;
 }
 
+/** Names in a formula: bare when they're plain identifiers, else [bracketed]. */
+export const nameToken = (name: string) => (/^[A-Za-z_][A-Za-z0-9_ ]*$/.test(name) ? name : `[${name}]`);
+
+// Parent + per-scenario date, kept stable per (parent object, date) so identity caches keep working.
+const dateOverlays = new WeakMap<CardDef, Map<string, CardDef>>();
+
 export function effectiveDef(card: ScenarioCard, library: Map<string, CardDef>): CardDef {
-  if (card.linked && card.parentId) return library.get(card.parentId) ?? card.def;
-  return card.def;
+  if (!card.linked || !card.parentId) return card.def;
+  const parent = library.get(card.parentId);
+  if (!parent) return card.def;
+  if (card.date === undefined) return parent;
+  let byDate = dateOverlays.get(parent);
+  if (!byDate) dateOverlays.set(parent, (byDate = new Map()));
+  const key = card.date ?? '';
+  let d = byDate.get(key);
+  if (!d) {
+    d = { ...parent };
+    if (card.date) d.date = card.date;
+    else delete d.date;
+    byDate.set(key, d);
+  }
+  return d;
 }
 
 export interface ScenarioTotals {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { cardFreeNames, effectiveDef, hoursFmt, money, pct, type ScenarioTotals } from '../calc';
+import { cardFreeNames, effectiveDef, hoursFmt, money, nameToken, pct, type ScenarioTotals } from '../calc';
 import { scenarioLocation, useStore } from '../store';
 import { TAX_ASSUMPTIONS, TAX_YEAR, hasIncomeTax } from '../tax/engine';
 import { countryOf, flagId, regionName } from '../tax/regions';
@@ -176,6 +176,7 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
   const remove = useStore((s) => s.removeScenarioCard);
   const move = useStore((s) => s.moveScenarioCard);
   const jump = useStore((s) => s.jumpToLibraryCard);
+  const setDate = useStore((s) => s.setScenarioCardDate);
   const [state, setState] = useState<'idle' | 'accept' | 'reject' | 'duplicate'>('idle');
 
   const cards = scenario.cards.filter((c) => effectiveDef(c, lib).kind === kind);
@@ -227,6 +228,7 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
           <span className={`kind-dot kind-dot--${kind}`} />
           {KIND_META[kind].plural}
         </h3>
+        {kind === 'hours' && <HoursMeter weekly={totals.weeklyHours} />}
         <span className="zone-hint">
           {state === 'reject'
             ? `Only ${KIND_META[kind].label.toLowerCase()} cards belong here`
@@ -250,7 +252,11 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
               seed={c.id}
               context="scenario"
               linked={linked}
-              onChange={linked ? undefined : (fn) => updateCard(scenario.id, c.id, fn)}
+              focusKey={c.id}
+              onChange={(fn) => updateCard(scenario.id, c.id, fn)}
+              dateOverride={linked ? c.date : undefined}
+              libraryDate={linked ? lib.get(c.parentId!)?.date : undefined}
+              onDate={linked ? (v) => setDate(scenario.id, c.id, v) : undefined}
               onUnlink={() => unlink(scenario.id, c.id)}
               onRemove={() => remove(scenario.id, c.id)}
               drag={{ type: DRAG_MOVE(kind), id: c.id }}
@@ -268,6 +274,68 @@ function Zone({ kind, scenario, lib, totals }: { kind: Kind; scenario: Scenario;
         {kind === 'income' && <TaxCard totals={totals} />}
       </div>
     </section>
+  );
+}
+
+/** Weekly-hours tiers (h/week): how busy a schedule this is. */
+const HOUR_TIERS = [
+  { max: 15, label: 'Light', color: '#8fd0f5' },
+  { max: 30, label: 'Moderate', color: '#9ee39a' },
+  { max: 40, label: 'Full-time', color: '#f5c04a' },
+  { max: 45, label: 'Full / active', color: '#f58a4a' },
+  { max: 55, label: 'Busy', color: '#e8484a' },
+  { max: 60, label: 'Very busy', color: '#3d5cc7' },
+  { max: Infinity, label: 'Maxed', color: '#9b2d55' },
+];
+const METER_MAX = 80;
+/** 16 waking hours a day (8 h sleep a night). */
+const WAKING_PER_WEEK = 16 * 7;
+
+/** Slim bar beside the Hours title: 0–80+ h/week, coloured by how busy that is. */
+function HoursMeter({ weekly }: { weekly: number }) {
+  const h = Number.isFinite(weekly) ? Math.max(0, weekly) : 0;
+  const tier = HOUR_TIERS.find((t) => h < t.max) ?? HOUR_TIERS[HOUR_TIERS.length - 1];
+  const shown = h >= 10 ? Math.round(h) : Math.round(h * 10) / 10;
+  const over = h > METER_MAX;
+  const ranges = HOUR_TIERS.map((t, i) => {
+    const lo = i ? HOUR_TIERS[i - 1].max : 0;
+    return `${t.label}: ${lo}${Number.isFinite(t.max) ? `–${t.max}` : '+'} h`;
+  });
+  const title = [
+    `${shown} h/week · ${tier.label}`,
+    `≈ ${Math.round((h / WAKING_PER_WEEK) * 100)}% of ${WAKING_PER_WEEK} waking hours (8 h sleep a night)`,
+    '',
+    ...ranges,
+  ].join('\n');
+  return (
+    <span
+      className="hours-meter"
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={METER_MAX}
+      aria-valuenow={Math.min(h, METER_MAX)}
+      aria-valuetext={`${shown} hours a week, ${tier.label}`}
+      aria-label="Weekly hours"
+      title={title}
+    >
+      <span className="hm-track">
+        {HOUR_TIERS.map((t, i) => {
+          const lo = i ? HOUR_TIERS[i - 1].max : 0;
+          const hi = Math.min(t.max, METER_MAX);
+          return (
+            <span
+              key={t.label}
+              className="hm-band"
+              style={{ left: `${(lo / METER_MAX) * 100}%`, width: `${((hi - lo) / METER_MAX) * 100}%`, background: t.color }}
+            />
+          );
+        })}
+        <span className="hm-fill" style={{ width: `${(Math.min(h, METER_MAX) / METER_MAX) * 100}%`, background: tier.color }} />
+      </span>
+      <span className="hm-label">
+        <b>{shown}{over ? '+' : ''}</b> h/wk · <span style={{ color: tier.color }}>{tier.label}</span>
+      </span>
+    </span>
   );
 }
 
@@ -306,7 +374,7 @@ function VariablesZone({ scenario, lib, totals }: { scenario: Scenario; lib: Map
     const el = document.activeElement as HTMLInputElement | null;
     const vid = el?.dataset.field;
     if (!el || !vid) return;
-    const token = /^[A-Za-z_][A-Za-z0-9_ ]*$/.test(name) ? name : `[${name}]`;
+    const token = nameToken(name);
     const a = el.selectionStart ?? el.value.length;
     const before = el.value.slice(0, a);
     const pad = before && !/[\s(=+\-*/^,]$/.test(before) ? ' ' : '';
@@ -343,6 +411,7 @@ function VariablesZone({ scenario, lib, totals }: { scenario: Scenario; lib: Map
                 readOnly={false}
                 unit={null}
                 focus={focus}
+                names={scenario.variables.filter((x) => x.id !== v.id && x.name.trim()).map((x) => x.name.trim())}
                 placeholder="value"
                 onFocusFormula={setFormulaFocus}
                 onName={(n) => updateVar(scenario.id, v.id, (f) => { f.name = n; })}

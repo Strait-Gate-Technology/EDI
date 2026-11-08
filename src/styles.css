@@ -1222,3 +1222,79 @@ body.is-mobile .poi-pop { width: auto; max-width: none; padding: 12px; }
   .poi-row { grid-template-columns: 1fr; gap: 6px; }
   .poi-seg { justify-self: start; }
 }
+
+/* ---------- wide "+ New card" button at the end of a zone ---------- */
+.add-card-wide {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 38px;
+  margin-top: 8px;
+  border: 1.5px dashed hsl(0 0% 100% / 0.16);
+  border-radius: 12px;
+  background: hsl(0 0% 100% / 0.03);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.add-card-wide { flex-direction: column; gap: 2px; }
+
+.add-card-wide small { font-size: 11px; color: var(--muted); opacity: 0.8; }
+/* Nothing in the zone yet: the button is the empty zone. */
+.add-card-wide.is-empty { min-height: 64px; margin-top: 0; }
+/* Under a stack: a slim tab that pokes out below the last card. */
+.add-card-wide:not(.is-empty) { min-height: 30px; border-top-left-radius: 6px; border-top-right-radius: 6px; }
+.add-card-wide:hover, .add-card-wide:focus-visible { background: hsl(0 0% 100% / 0.08); border-color: hsl(0 0% 100% / 0.32); color: var(--text); }
+
+/* ---------- formula name autocomplete ---------- */
+.card:has(.ac-list), .var-row:has(.ac-list) { z-index: 30; position: relative; }
+.ac-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: 10px;
+  border: 1px solid hsl(0 0% 100% / 0.18);
+  background: hsl(232 22% 14% / 0.97);
+  box-shadow: 0 12px 28px -8px rgb(0 0 0 / 0.7);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.ac-item {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ac-item.is-active, .ac-item:hover { background: hsl(0 0% 100% / 0.12); }
+
+/* ---------- per-scenario date mark ---------- */
+.date-pill.is-scoped { border-color: hsl(200 90% 75% / 0.5); }
+.date-pill-scope { font-size: 10px; color: var(--muted); margin-left: 2px; }
+
+/* ---------- weekly hours meter ---------- */
+.hours-meter { display: inline-flex; align-items: center; gap: 8px; min-width: 0; cursor: help; }
+.hm-track { position: relative; width: 140px; height: 8px; border-radius: 8px; background: hsl(0 0% 100% / 0.06); overflow: hidden; flex-shrink: 0; }
+.hm-band { position: absolute; top: 0; bottom: 0; opacity: 0.18; }
+.hm-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; box-shadow: 0 0 8px currentColor; transition: width 0.25s, background 0.25s; }
+.hm-label { font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hm-label b { color: var(--text); font-weight: 600; }
+@media (max-width: 900px) {
+  .hm-track { width: 110px; }
+}

@@ -1,5 +1,5 @@
-import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { VALUE_ID, evaluateCard, fmtUnit, money, num, oneTimeProblem, type FieldResult, type Scope } from '../calc';
+import { memo, useEffect, useId, useMemo, useRef, useState, type DragEvent } from 'react';
+import { VALUE_ID, evaluateCard, fmtUnit, money, nameToken, num, oneTimeProblem, type FieldResult, type Scope } from '../calc';
 import { uid, useStore } from '../store';
 import { FREQUENCIES, KIND_META, PER_YEAR, PERIODS, fmtDate, fmtPeriod, poiDays, type CardDef, type PeriodOfInterest } from '../types';
 import { DRAG_PARENT, scrollAndFocus } from './hooks';
@@ -39,6 +39,14 @@ export interface CardViewProps {
   onSetPeriod?: () => void;
   /** The frequency was just switched to One-time. */
   onOneTime?: () => void;
+  /** Scenario cards: focus/scroll here when the store's focus target is this id. */
+  focusKey?: string;
+  /** Linked scenario cards: this scenario's own date (undefined = follow the library card, null = none). */
+  dateOverride?: string | null;
+  /** Linked scenario cards: the library card's date. */
+  libraryDate?: string;
+  /** Linked scenario cards: set this scenario's date instead of the library card's. */
+  onDate?: (date: string | null | undefined) => void;
 }
 
 /**
@@ -72,14 +80,15 @@ function CardViewImpl(p: CardViewProps) {
   const [dropHover, setDropHover] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Jump to a freshly created library card and select its name.
-  const focusNonce = useStore((s) => (p.context === 'library' && s.focusTarget?.id === def.id ? s.focusTarget.nonce : 0));
+  // Jump to a freshly created card and select its name.
+  const focusKey = p.focusKey ?? (p.context === 'library' ? def.id : null);
+  const focusNonce = useStore((s) => (focusKey && s.focusTarget?.id === focusKey ? s.focusTarget.nonce : 0));
   const clearFocus = useStore((s) => s.clearFocus);
   useEffect(() => {
-    if (!focusNonce) return;
+    if (!focusNonce || !focusKey) return;
     scrollAndFocus(cardRef.current, cardRef.current?.querySelector<HTMLInputElement>('.card-name'));
-    clearFocus(def.id);
-  }, [focusNonce, def.id, clearFocus]);
+    clearFocus(focusKey);
+  }, [focusNonce, focusKey, clearFocus]);
 
   const addField = (role: 'variable' | 'equation') => {
     if (!onChange) return;
@@ -107,7 +116,7 @@ function CardViewImpl(p: CardViewProps) {
     const el = document.activeElement as HTMLInputElement | null;
     const fieldId = el?.dataset.field;
     if (!el || !fieldId) return;
-    const token = /^[A-Za-z_][A-Za-z0-9_ ]*$/.test(name) ? name : `[${name}]`;
+    const token = nameToken(name);
     const s = el.selectionStart ?? el.value.length;
     const e = el.selectionEnd ?? el.value.length;
     const before = el.value.slice(0, s);
@@ -120,20 +129,8 @@ function CardViewImpl(p: CardViewProps) {
     });
   };
 
-  const menuItems = [
-    { label: 'Variable…', hint: 'Named input value', onClick: () => addField('variable') },
-    { label: 'Equation…', hint: 'Named =formula field', onClick: () => addField('equation') },
-    {
-      label: `${meta.label} from equation`,
-      hint: 'Turn the final value into =formula',
-      disabled: def.value.trim().startsWith('='),
-      onClick: () => {
-        const names = def.fields.map((f) => f.name.trim()).filter(Boolean);
-        setExpr(VALUE_ID, '=' + (names.length ? names.join(' * ') : ''));
-        setFocusId(VALUE_ID + ':expr');
-      },
-    },
-  ];
+  // Equations: type "=" in any box.
+  const menuItems = [{ label: 'Variable…', hint: 'Named value; type = for a formula', onClick: () => addField('variable') }];
 
   const onDragStart = (e: DragEvent) => {
     if (!p.drag) return;
@@ -156,7 +153,26 @@ function CardViewImpl(p: CardViewProps) {
     ...(p.scope ? [...p.scope.byName.values()].map((v) => v.name) : []),
   ].filter((n, i, a) => a.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i);
   const fromScope = result.needs.filter((n) => !result.missing.includes(n));
-  const linkedRO = p.context === 'scenario' && p.linked;
+  const linkedEdit = p.context === 'scenario' && p.linked && !readOnly;
+
+  // Date of a one-time card. Linked scenario copies keep their own date per scenario.
+  const scopedDate = !!p.onDate;
+  const ov = p.dateOverride;
+  const dateClear = scopedDate
+    ? ov !== undefined || p.libraryDate
+      ? {
+          run: () => p.onDate!(ov !== undefined ? undefined : null),
+          title:
+            ov !== undefined
+              ? p.libraryDate
+                ? `Use the library card’s date (${fmtDate(p.libraryDate)})`
+                : 'Use the library card’s default (start of the period)'
+              : 'No date in this scenario: counts at the start of its period',
+        }
+      : null
+    : def.date
+      ? { run: () => onChange?.((d) => { delete d.date; }), title: 'Remove the date' }
+      : null;
 
   // One-time (lump sum) cards.
   const once = def.frequency === 'once' && def.kind !== 'hours';
@@ -179,7 +195,7 @@ function CardViewImpl(p: CardViewProps) {
         (dropHover ? ' drop-before' : '')
       }
       style={cycle(p.seed, 140, 420)}
-      title={linkedRO ? 'Linked to its library card — edit the parent, or click the chain to unlink' : undefined}
+      title={linkedEdit ? 'Linked: edits also change the library card and its other copies. Click the chain to unlink.' : undefined}
       onDragOver={(e) => {
         if (!accepts(e)) return;
         e.preventDefault();
@@ -200,7 +216,7 @@ function CardViewImpl(p: CardViewProps) {
         {readOnly ? (
           <span className="type-badge" aria-hidden="true">{badge(def.kind)}</span>
         ) : (
-          <Menu label="Add variable or equation" trigger={<Icon name="plus" size={14} />} items={menuItems} />
+          <Menu label="Add variable" trigger={<Icon name="plus" size={14} />} items={menuItems} />
         )}
         <InlineName
           className="card-name"
@@ -307,6 +323,7 @@ function CardViewImpl(p: CardViewProps) {
               readOnly={readOnly}
               unit={null}
               focus={focusId}
+              names={chipNames.filter((n) => n.toLowerCase() !== f.name.trim().toLowerCase())}
               onFocusFormula={setFormulaFocus}
               onName={(v) => onChange?.((d) => { const x = d.fields.find((y) => y.id === f.id); if (x) x.name = v; })}
               onExpr={(v) => setExpr(f.id, v)}
@@ -326,6 +343,7 @@ function CardViewImpl(p: CardViewProps) {
           readOnly={readOnly}
           unit={meta.unit}
           focus={focusId}
+          names={chipNames}
           onFocusFormula={setFormulaFocus}
           onExpr={(v) => setExpr(VALUE_ID, v)}
           isFinal
@@ -354,7 +372,15 @@ function CardViewImpl(p: CardViewProps) {
               bad={problem === 'out-of-period'}
               min={inScenario && days ? p.poi!.start : undefined}
               max={inScenario && days ? p.poi!.end : undefined}
-              onSet={(v) => onChange?.((d) => { d.date = v; })}
+              onSet={(v) => (scopedDate ? p.onDate!(v) : onChange?.((d) => { d.date = v; }))}
+              clear={dateClear}
+              scoped={scopedDate && ov !== undefined}
+              emptyLabel={scopedDate && ov === null ? 'Period start' : undefined}
+              hint={
+                scopedDate
+                  ? `This scenario only. Library card: ${p.libraryDate ? fmtDate(p.libraryDate) : 'no date (start of the period)'}`
+                  : undefined
+              }
             />
           )}
           {once && def.kind === 'income' && (
@@ -401,9 +427,7 @@ function CardViewImpl(p: CardViewProps) {
           ) : problem === 'out-of-period' ? (
             <span>
               ⚠ {fmtDate(def.date)} is outside this scenario’s period ({fmtPeriod(p.poi!)}); not counted.{' '}
-              {p.linked
-                ? 'Change the library card’s date, unlink to give this scenario its own date, or widen the period.'
-                : 'Change the date or the period.'}
+Change the date or the period.
             </span>
           ) : (
             `${verb} at the start of the period (${fmtDate(p.poi?.start)})`
@@ -429,6 +453,39 @@ function badge(kind: CardDef['kind']) {
   return kind === 'income' ? '+$' : kind === 'expense' ? '−$' : <Icon name="clock" size={13} />;
 }
 
+interface Suggest {
+  items: string[];
+  i: number;
+  /** Replace value[start, end) with the chosen name. */
+  start: number;
+  end: number;
+}
+
+/** Names that complete the token being typed just before the caret of an =formula. */
+function suggest(value: string, caret: number, names: string[]): Suggest | null {
+  if (!value.trimStart().startsWith('=') || !names.length) return null;
+  const before = value.slice(0, caret);
+  let start: number;
+  let tok: string;
+  const br = /\[([^\]]*)$/.exec(before);
+  if (br) {
+    start = br.index;
+    tok = br[1];
+  } else {
+    const m = /[A-Za-z_][A-Za-z0-9_ ]*$/.exec(before);
+    if (!m) return null;
+    start = m.index;
+    tok = m[0];
+  }
+  const t = tok.trim().toLowerCase();
+  if (!t) return null;
+  const pool = names.filter((n) => n.toLowerCase() !== t);
+  const prefix = pool.filter((n) => n.toLowerCase().startsWith(t));
+  const word = pool.filter((n) => !prefix.includes(n) && n.toLowerCase().split(/[\s_]+/).some((w) => w.startsWith(t)));
+  const items = [...prefix, ...word].slice(0, 6);
+  return items.length ? { items, i: 0, start, end: caret } : null;
+}
+
 export function FieldRow(props: {
   name: string;
   expr: string;
@@ -439,6 +496,8 @@ export function FieldRow(props: {
   unit: '$' | 'h' | null;
   focus: string | null;
   isFinal?: boolean;
+  /** Names offered by autocomplete while typing an =formula. */
+  names?: string[];
   onFocusFormula: (id: string | null) => void;
   onName?: (v: string) => void;
   onExpr: (v: string) => void;
@@ -449,6 +508,8 @@ export function FieldRow(props: {
   const r = props.result;
   const nameRef = useRef<HTMLDivElement>(null);
   const exprRef = useRef<HTMLInputElement>(null);
+  const [ac, setAc] = useState<Suggest | null>(null);
+  const listId = useId();
   useEffect(() => {
     if (props.focus === props.fieldId + ':expr') {
       exprRef.current?.focus();
@@ -461,6 +522,24 @@ export function FieldRow(props: {
     }
   }, [props.focus, props.fieldId]);
   const isFormula = props.expr.trim().startsWith('=');
+
+  const accept = (name: string) => {
+    const el = exprRef.current;
+    if (!el || !ac) return;
+    const v = el.value;
+    let end = ac.end;
+    const bracket = v[ac.start] === '[';
+    if (bracket && v[end] === ']') end++;
+    const ins = bracket ? `[${name}]` : nameToken(name);
+    props.onExpr(v.slice(0, ac.start) + ins + v.slice(end));
+    setAc(null);
+    const pos = ac.start + ins.length;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
   return (
     <div className={'field' + (props.isFinal ? ' field--final' : '') + (r?.error ? ' field--error' : '') + (isFormula ? ' field--formula' : '')}>
       <div className="field-label-wrap" ref={nameRef}>
@@ -487,16 +566,63 @@ export function FieldRow(props: {
           placeholder={props.placeholder ?? (props.role === 'equation' ? '=formula' : '0')}
           inputMode={isFormula ? 'text' : 'decimal'}
           spellCheck={false}
+          autoComplete="off"
           data-field={props.fieldId}
           aria-label={`${props.name} value`}
           aria-invalid={!!r?.error}
+          aria-autocomplete="list"
+          aria-expanded={!!ac}
+          aria-controls={ac ? listId : undefined}
+          aria-activedescendant={ac ? `${listId}-${ac.i}` : undefined}
           onFocus={(e) => props.onFocusFormula(e.target.value.trim().startsWith('=') ? props.fieldId : null)}
-          onBlur={() => props.onFocusFormula(null)}
+          onBlur={() => {
+            setAc(null);
+            props.onFocusFormula(null);
+          }}
           onChange={(e) => {
-            props.onExpr(e.target.value);
-            props.onFocusFormula(e.target.value.trim().startsWith('=') ? props.fieldId : null);
+            const el = e.target;
+            props.onExpr(el.value);
+            props.onFocusFormula(el.value.trim().startsWith('=') ? props.fieldId : null);
+            const caret = el.selectionStart ?? el.value.length;
+            setAc(el.selectionEnd === caret && props.names ? suggest(el.value, caret, props.names) : null);
+          }}
+          onKeyDown={(e) => {
+            if (!ac) return;
+            const n = ac.items.length;
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              e.preventDefault();
+              setAc({ ...ac, i: (ac.i + (e.key === 'ArrowDown' ? 1 : n - 1)) % n });
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+              e.preventDefault();
+              accept(ac.items[ac.i]);
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              setAc(null);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') {
+              setAc(null);
+            }
           }}
         />
+        {ac && (
+          <ul className="ac-list" id={listId} role="listbox" aria-label="Matching names">
+            {ac.items.map((n, i) => (
+              <li
+                key={n}
+                id={`${listId}-${i}`}
+                role="option"
+                aria-selected={i === ac.i}
+                className={'ac-item' + (i === ac.i ? ' is-active' : '')}
+                // Keep focus (and the mobile keyboard) on the input.
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => accept(n)}
+              >
+                {n}
+              </li>
+            ))}
+          </ul>
+        )}
         {!props.readOnly && props.onRemove && (
           <button type="button" className="tool tool--danger field-remove" onClick={props.onRemove} aria-label={`Remove ${props.name}`} title="Remove field">
             <Icon name="x" size={12} />
@@ -525,6 +651,14 @@ function DatePill(p: {
   min?: string;
   max?: string;
   onSet: (iso: string | undefined) => void;
+  /** The × button, when there is something to clear. */
+  clear?: { run: () => void; title: string } | null;
+  /** The date is this scenario's own (not the library card's). */
+  scoped?: boolean;
+  /** Pill text when there's no date. */
+  emptyLabel?: string;
+  /** Extra tooltip line. */
+  hint?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const pillRef = useRef<HTMLButtonElement>(null);
@@ -573,30 +707,24 @@ function DatePill(p: {
       />
     );
   }
+  const base = label
+    ? `Date ${p.verb.toLowerCase()} — click to change`
+    : 'Optional. Without a date it counts at the start of the scenario’s Period of Interest.';
   return (
     <span className="date-pill-wrap">
       <button
         ref={pillRef}
         type="button"
-        className={'flag-pill date-pill' + (label ? '' : ' is-empty') + (p.bad ? ' is-bad' : '')}
-        title={
-          label
-            ? `Date ${p.verb.toLowerCase()} — click to change`
-            : 'Optional. Without a date it counts at the start of the scenario’s Period of Interest.'
-        }
+        className={'flag-pill date-pill' + (label || p.emptyLabel ? '' : ' is-empty') + (p.bad ? ' is-bad' : '') + (p.scoped ? ' is-scoped' : '')}
+        title={p.hint ? `${base}\n${p.hint}` : base}
         onClick={() => setEditing(true)}
       >
         <Icon name="calendar" size={12} />
-        {label || 'Add date'}
+        {label || p.emptyLabel || 'Add date'}
+        {p.scoped && <small className="date-pill-scope">this scenario</small>}
       </button>
-      {label && (
-        <button
-          type="button"
-          className="date-pill-clear"
-          title="Remove the date"
-          aria-label="Remove the date"
-          onClick={() => p.onSet(undefined)}
-        >
+      {p.clear && (
+        <button type="button" className="date-pill-clear" title={p.clear.title} aria-label={p.clear.title} onClick={p.clear.run}>
           <Icon name="x" size={10} />
         </button>
       )}

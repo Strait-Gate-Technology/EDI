@@ -16,9 +16,8 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
   const view = useStore((s) => s.view);
   const period = useStore((s) => s.period);
   const location = useStore((s) => s.location);
-  const reduceEffects = useStore((s) => s.reduceEffects);
   const focusId = useStore((s) => s.focusTarget?.id);
-  const { addScenario, setActive, setView, setPeriod, replaceAll, setLocation, setReduceEffects, clearSlot, duplicateScenario } = useStore.getState();
+  const { addScenario, setActive, setView, setPeriod, replaceAll, setLocation, clearSlot, duplicateScenario } = useStore.getState();
   const library = useStore((s) => s.library);
   const [ctx, setCtx] = useState<{ id: string; x: number; y: number } | null>(null);
   // Touch long-press opens the same menu as right-click (iOS never fires contextmenu).
@@ -60,7 +59,7 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
     const s = useStore.getState();
     const data: AppData = {
       library: s.library, scenarios: s.scenarios, activeScenarioId: s.activeScenarioId,
-      view: s.view, period: s.period, analysis: s.analysis, location: s.location, reduceEffects: s.reduceEffects,
+      view: s.view, period: s.period, analysis: s.analysis, location: s.location,
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a');
@@ -234,11 +233,6 @@ export function TopBar({ mobile = false }: { mobile?: boolean }) {
           align="right"
           trigger={<Icon name="menu" />}
           items={[
-            {
-              label: reduceEffects ? '✓ Reduce visual effects' : 'Reduce visual effects',
-              hint: 'Stops colour cycling & background drift',
-              onClick: () => setReduceEffects(!reduceEffects),
-            },
             { label: 'Take the tour', hint: 'Five quick tips', onClick: startTour },
             { label: 'Share project…', hint: 'Link or QR code with everything', onClick: () => openShare() },
             { label: 'Export JSON', hint: 'Download all cards & scenarios', onClick: exportData },
